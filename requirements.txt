@@ -1,0 +1,7 @@
+kiteconnect
+pandas
+numpy
+python-dotenv
+requests
+pyarrow
+pytest

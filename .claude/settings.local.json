@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe run_swing_trade_system.py)",
+      "PowerShell(pytest *)",
+      "PowerShell(python run_swing_trade_system.py)",
+      "PowerShell(python test_news_alert.py RELIANCE)",
+      "PowerShell(python test_news_alert.py MOTHERSON)",
+      "PowerShell(python test_news_alert.py SUZLON)",
+      "PowerShell(python test_news_alert.py ASHOKLEY)",
+      "PowerShell(python scan_portfolio_news.py)",
+      "PowerShell(Get-ChildItem -File -Recurse | Select-Object FullName | ForEach-Object { $_.FullName.Substring\\(\\(Get-Location\\).Path.Length + 1\\) })"
+    ]
+  }
+}

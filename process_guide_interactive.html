@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NiftyScanner - Interactive Process Guide & Technical Reference</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --sidebar-bg: #1e293b;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-indigo: #818cf8;
+            --accent-green: #34d399;
+            --accent-red: #f87171;
+            --accent-yellow: #fbbf24;
+            --code-bg: #0b0f19;
+            --border-color: #334155;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 320px;
+            background-color: var(--sidebar-bg);
+            padding: 24px 0;
+            overflow-y: auto;
+            height: 100%;
+            border-right: 1px solid var(--border-color);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-brand {
+            font-size: 20px;
+            font-weight: 800;
+            color: #fff;
+            padding: 0 24px 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sidebar-brand .tag {
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            color: #0f172a;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+        }
+
+        .nav-group { margin-bottom: 24px; }
+        .nav-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            padding: 0 24px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 24px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 13.5px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        .nav-item:hover {
+            background-color: rgba(56, 189, 248, 0.08);
+            color: #fff;
+        }
+        .nav-item.active {
+            background-color: rgba(56, 189, 248, 0.12);
+            border-left: 3px solid var(--accent-blue);
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+        .nav-item .icon { font-size: 16px; margin-right: 12px; }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            padding: 40px 60px;
+            overflow-y: auto;
+            height: 100%;
+            background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.03), transparent 40%);
+        }
+        .section { display: none; }
+        .section.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Typography & Layout */
+        .header-title { font-size: 32px; font-weight: 800; color: #fff; margin: 0 0 6px 0; letter-spacing: -0.5px; }
+        .subtitle { color: var(--accent-blue); font-size: 15px; font-family: 'Consolas', monospace; margin-bottom: 30px; font-weight: 500; }
+        h2 { font-size: 20px; font-weight: 700; color: #fff; margin-top: 40px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        h3 { font-size: 16px; font-weight: 600; color: var(--accent-yellow); margin-top: 24px; margin-bottom: 12px; }
+        p { line-height: 1.7; color: #cbd5e1; font-size: 14.5px; margin-bottom: 16px; }
+
+        /* Callout and Scenario Boxes */
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin: 24px 0; }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .card:hover { transform: translateY(-3px); border-color: #475569; }
+        .card-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+
+        .scenario-box {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-indigo);
+            border-radius: 8px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        .scenario-header {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent-indigo);
+            font-weight: 800;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Flow Diagrams */
+        .flow-diagram {
+            display: flex;
+            align-items: stretch;
+            justify-content: space-between;
+            background: #131d2e;
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin: 30px 0;
+            gap: 12px;
+            overflow-x: auto;
+        }
+        .flow-step {
+            flex: 1;
+            min-width: 140px;
+            background: var(--sidebar-bg);
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 16px 12px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .flow-step-num { font-size: 11px; font-weight: 800; color: var(--accent-blue); text-transform: uppercase; margin-bottom: 4px; }
+        .flow-step-title { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+        .flow-step-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+        .flow-arrow { display: flex; align-items: center; color: var(--accent-blue); font-size: 20px; }
+
+        /* Code Blocks */
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 18px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        code { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; color: #e2e8f0; line-height: 1.6; }
+        .kw { color: #f472b6; }
+        .fn { color: #60a5fa; }
+        .str { color: #a3e635; }
+        .num { color: #fb923c; }
+        .cm { color: #64748b; font-style: italic; }
+
+        /* Badges */
+        .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700; }
+        .badge-blue { background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+        .badge-green { background: rgba(52, 211, 153, 0.15); color: var(--accent-green); border: 1px solid rgba(52, 211, 153, 0.3); }
+        .badge-red { background: rgba(248, 113, 113, 0.15); color: var(--accent-red); border: 1px solid rgba(248, 113, 113, 0.3); }
+        .badge-yellow { background: rgba(251, 191, 36, 0.15); color: var(--accent-yellow); border: 1px solid rgba(251, 191, 36, 0.3); }
+
+        /* Data Tables */
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 14px 16px; text-align: left; font-size: 13.5px; }
+        th { background-color: #1e293b; color: #94a3b8; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); }
+        td { border-bottom: 1px solid var(--border-color); color: #cbd5e1; background-color: rgba(30, 41, 59, 0.4); }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background-color: rgba(56, 189, 248, 0.04); }
+
+        /* Telegram Mock Card */
+        .tg-card {
+            background: #1e293b;
+            border-left: 4px solid var(--accent-blue);
+            border-radius: 8px;
+            padding: 16px 20px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            color: #f1f5f9;
+            line-height: 1.6;
+            margin: 20px 0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            max-width: 550px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <span>⚡ NiftyScanner V1</span>
+            <span class="tag">Docs</span>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-title">Core Execution</div>
+            <div class="nav-item active" onclick="showTab('run_swing')"><span class="icon">🚀</span> 1. Master Pipeline (Runner)</div>
+            <div class="nav-item" onclick="showTab('portfolio_news')"><span class="icon">💼</span> 2. Portfolio News Scanner</div>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-title">Trading Strategy Logic</div>
+            <div class="nav-item" onclick="showTab('strategy_engine')"><span class="icon">⚙️</span> 3. Swing Setup Engine</div>
+            <div class="nav-item" onclick="showTab('indicators')"><span class="icon">📊</span> 4. Technical Indicators</div>
+            <div class="nav-item" onclick="showTab('ranking_sizing')"><span class="icon">🎯</span> 5. Ranking & Position Sizing</div>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-title">Alternative Engines</div>
+            <div class="nav-item" onclick="showTab('rebound_scanner')"><span class="icon">📉</span> 6. 52-Wk Rebound Screener</div>
+            <div class="nav-item" onclick="showTab('fundamental_screener')"><span class="icon">🏦</span> 7. Fundamental Screener</div>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-title">Data & Integrations</div>
+            <div class="nav-item" onclick="showTab('news_nlp')"><span class="icon">📰</span> 8. News NLP Sentiment</div>
+            <div class="nav-item" onclick="showTab('telegram_alerts')"><span class="icon">✉️</span> 9. Telegram Alert Dispatch</div>
+            <div class="nav-item" onclick="showTab('excel_builder')"><span class="icon">📑</span> 10. Excel Recovery Reports</div>
+            <div class="nav-item" onclick="showTab('settings_config')"><span class="icon">🔧</span> 11. Configuration & Settings</div>
+
+            <div class="nav-title" style="margin-top: 24px;">Data Pipelines</div>
+            <div class="nav-item" onclick="showTab('market_universe')"><span class="icon">🌌</span> 12. Market Universe & Liquidity</div>
+            <div class="nav-item" onclick="showTab('historical_caching')"><span class="icon">💾</span> 13. Historical Data & Caching</div>
+            <div class="nav-item" onclick="showTab('fii_dii_flow')"><span class="icon">🏛️</span> 14. FII/DII Flow Engine</div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+
+        <!-- 1. MASTER SWING TRADE SYSTEM -->
+        <div id="run_swing" class="section active">
+            <div class="header-title">Master Swing Trade System</div>
+            <div class="subtitle">run_swing_trade_system.py</div>
+            <p>The central orchestrator of the entire quantitative trading architecture. It synchronizes live market quotes, filters thousands of symbols for instant liquidity, downloads historical candlesticks, calculates mathematical signals, analyzes live news sentiment, sizes positions, and delivers instant Telegram alerts.</p>
+
+            <h2>Step-by-Step Architecture</h2>
+            <div class="flow-diagram">
+                <div class="flow-step">
+                    <div class="flow-step-num">Step 1</div>
+                    <div class="flow-step-title">Universe & Auth</div>
+                    <div class="flow-step-desc">Auth Zerodha API + Ingest 2,000+ NSE symbols</div>
+                </div>
+                <div class="flow-arrow">➔</div>
+                <div class="flow-step">
+                    <div class="flow-step-num">Step 2</div>
+                    <div class="flow-step-title">Turnover Filter</div>
+                    <div class="flow-step-desc">Quote-based filter: Traded Value > ₹1 Cr</div>
+                </div>
+                <div class="flow-arrow">➔</div>
+                <div class="flow-step">
+                    <div class="flow-step-num">Step 3</div>
+                    <div class="flow-step-title">Indicators & Setups</div>
+                    <div class="flow-step-desc">Calculate RSI, SMA, ATR + Test Strategies</div>
+                </div>
+                <div class="flow-arrow">➔</div>
+                <div class="flow-step">
+                    <div class="flow-step-num">Step 4</div>
+                    <div class="flow-step-title">News & Alerts</div>
+                    <div class="flow-step-desc">Filter Red-Flags via NLP + Telegram Dispatch</div>
+                </div>
+            </div>
+
+            <h2>Comprehensive Scenario Walkthrough</h2>
+            <div class="scenario-box">
+                <div class="scenario-header">⚡ Practical Trading Execution Scenario</div>
+                <p><strong>1. Initial Scan:</strong> You execute <code>python run_swing_trade_system.py</code> at 7:30 PM. The script pulls quotes for 2,240 NSE equities.</p>
+                <p><strong>2. Liquidity Filter:</strong> Only 380 stocks satisfy the minimum threshold of ₹1,00,00,000 turnover per day. The other 1,860 illiquid stocks are ignored instantly.</p>
+                <p><strong>3. Strategy Match:</strong> <b>HAL</b> satisfies the Breakout criteria (surpassing its 20-day high with 2.4x volume). <b>TCS</b> satisfies the 20-SMA Pullback criteria.</p>
+                <p><strong>4. News Check:</strong> The script reads Google News RSS for HAL. It finds a Positive catalyst: <i>"HAL signs ₹30,000 Cr aircraft contract"</i>.</p>
+                <p><strong>5. Dispatch:</strong> HAL is assigned 92/100 conviction score and sent as a rich formatted card to Telegram with exact share sizing.</p>
+            </div>
+        </div>
+
+        <!-- 2. PORTFOLIO NEWS SCANNER -->
+        <div id="portfolio_news" class="section">
+            <div class="header-title">Portfolio News & Sentiment Scanner</div>
+            <div class="subtitle">scan_portfolio_news.py</div>
+            <p>Monitors all actively held positions in your Zerodha account. It calculates live profit & loss and scrapes financial news in real-time to alert you of potential red-flags or positive catalysts that could impact your open trades overnight.</p>
+
+            <h2>Core Processing Logic</h2>
+            <pre><code><span class="cm"># 1. Fetch live holdings directly from Zerodha Kite</span>
+holdings = kite.holdings()
+
+<span class="cm"># 2. Iterate through stocks, calculate live P&L and fetch news</span>
+<span class="kw">for</span> h <span class="kw">in</span> holdings:
+    symbol = h[<span class="str">'tradingsymbol'</span>]
+    invested = h[<span class="str">'quantity'</span>] * h[<span class="str">'average_price'</span>]
+    current_val = h[<span class="str">'quantity'</span>] * h[<span class="str">'last_price'</span>]
+    pnl_pct = ((current_val - invested) / invested) * <span class="num">100</span>
+
+    <span class="cm"># 3. Analyze live financial headlines</span>
+    articles = fetch_company_news(symbol, max_articles=<span class="num">3</span>)
+    analysis = analyze_news_sentiment(symbol, articles)</code></pre>
+
+            <h2>Categorization Badges</h2>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-title"><span class="badge badge-red">🚨 CAUTION</span> Negative Catalysts</div>
+                    <p>Triggered on words like: <i>Probe, Fraud, Resigns, Crashes, SEBI Notice, Show Cause, Loss Widens</i>. Urgent recommendation to evaluate stop-loss or exit.</p>
+                </div>
+                <div class="card">
+                    <div class="card-title"><span class="badge badge-green">🟢 POSITIVE</span> Bullish Catalysts</div>
+                    <p>Triggered on words like: <i>Order Win, Record Profit, Deal, Acquisition, Bonus, Upgrade</i>. Indicates confidence to trail profits or add.</p>
+                </div>
+                <div class="card">
+                    <div class="card-title"><span class="badge badge-yellow">⚪ NEUTRAL</span> Stable Routine</div>
+                    <p>Routine earnings dates, general market index mentions, or neutral commentary.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. SWING SETUP ENGINE -->
+        <div id="strategy_engine" class="section">
+            <div class="header-title">Swing Setup Engine</div>
+            <div class="subtitle">swing_strategies/swing_setup_engine.py</div>
+            <p>Contains the core mathematical algorithms used to detect swing setups from daily candlesticks.</p>
+
+            <h2>1. Momentum Breakout Strategy</h2>
+            <table>
+                <tr><th>Rule Requirement</th><th>Mathematical Expression</th><th>Meaning</th></tr>
+                <tr><td>Trend Stack</td><td><code>Price > 20 SMA > 50 SMA</code></td><td>Price is trading above rising short and medium-term moving averages.</td></tr>
+                <tr><td>Volume Surge</td><td><code>Volume >= 1.5 * SMA(Volume, 20)</code></td><td>Volume today is at least 150% of the 20-day normal volume.</td></tr>
+                <tr><td>Breakout Level</td><td><code>Close >= Highest_High(20)</code></td><td>Price is at or above the 20-day high.</td></tr>
+                <tr><td>RSI Boundary</td><td><code>55 <= RSI(14) <= 75</code></td><td>Strong momentum without being dangerously overheated.</td></tr>
+            </table>
+
+            <h2>2. Strong Trend Pullback (Dip-Buying)</h2>
+            <table>
+                <tr><th>Rule Requirement</th><th>Mathematical Expression</th><th>Meaning</th></tr>
+                <tr><td>Macro Uptrend</td><td><code>Price > 50 SMA and 50 SMA Rising</code></td><td>Long-term institutional buying trend is intact.</td></tr>
+                <tr><td>Support Test</td><td><code>abs(Price - 20 SMA) / Price <= 0.015</code></td><td>Price has pulled back to rest directly upon the 20-day average.</td></tr>
+                <tr><td>Oversold Recovery</td><td><code>45 <= RSI(14) <= 60</code></td><td>Momentum has completely cooled off, offering an asymmetric entry.</td></tr>
+            </table>
+        </div>
+
+        <!-- 4. TECHNICAL INDICATORS -->
+        <div id="indicators" class="section">
+            <div class="header-title">Technical Indicator Calculator</div>
+            <div class="subtitle">historical_market_data/technical_indicator_calculator.py</div>
+            <p>Calculates exact moving averages, Wilder's smoothed RSI, and volatility spread indicators.</p>
+
+            <div class="scenario-box">
+                <div class="scenario-header">📊 Wilder's Smoothed RSI (14) Formulation</div>
+                <p>Unlike standard simple RSI, Wilder's RSI applies exponential smoothing over gains and losses to prevent false whipsaws in Indian equity swings:</p>
+                <pre><code>delta = df[<span class="str">'close'</span>].diff()
+gain = delta.where(delta > <span class="num">0</span>, <span class="num">0.0</span>)
+loss = -delta.where(delta < <span class="num">0</span>, <span class="num">0.0</span>)
+
+avg_gain = gain.ewm(alpha=<span class="num">1</span>/<span class="num">14</span>, min_periods=<span class="num">14</span>, adjust=<span class="kw">False</span>).mean()
+avg_loss = loss.ewm(alpha=<span class="num">1</span>/<span class="num">14</span>, min_periods=<span class="num">14</span>, adjust=<span class="kw">False</span>).mean()
+
+rs = avg_gain / avg_loss
+df[<span class="str">'rsi'</span>] = <span class="num">100</span> - (<span class="num">100</span> / (<span class="num">1</span> + rs))</code></pre>
+            </div>
+        </div>
+
+        <!-- 5. RANKING & POSITION SIZING -->
+        <div id="ranking_sizing" class="section">
+            <div class="header-title">Ranking & Position Sizing Engine</div>
+            <div class="subtitle">trade_selection/position_size_calculator.py & swing_candidate_ranker.py</div>
+            <p>Computes risk-controlled quantities and dynamic profit targets based on volatility.</p>
+
+            <h2>Position Sizing Formula</h2>
+            <div class="scenario-box">
+                <div class="scenario-header">🛡️ The 1% Account Risk Calculation</div>
+                <p style="font-size: 16px; color: var(--accent-blue); font-family: monospace;"><b>Quantity = int( (Total Capital × Risk Fraction) / |Entry Price - Stop Loss| )</b></p>
+                <hr style="border-color: var(--border-color); margin: 15px 0;">
+                <p><strong>Example Calculation:</strong></p>
+                <ul>
+                    <li>Total Trading Capital = <b>₹5,00,000</b></li>
+                    <li>Risk per Trade = <b>1% (₹5,000 max loss)</b></li>
+                    <li>Stock: <b>RELIANCE</b> | Entry = <b>₹2,500</b> | Stop Loss = <b>₹2,400</b></li>
+                    <li>Risk per share = <b>₹100</b></li>
+                    <li><b>Quantity to Buy = ₹5,000 / ₹100 = 50 Shares</b></li>
+                </ul>
+            </div>
+
+            <h2>Dynamic Multi-Targets</h2>
+            <table>
+                <tr><th>Target Level</th><th>Calculation</th><th>Execution Action</th></tr>
+                <tr><td><span class="badge badge-green">T1 (50%)</span></td><td><code>Entry + 1.5 * (Entry - StopLoss)</code></td><td>Book 50% profits, move Stop-Loss to Breakeven.</td></tr>
+                <tr><td><span class="badge badge-yellow">T2 (30%)</span></td><td><code>Entry + 2.5 * (Entry - StopLoss)</code></td><td>Book 30% profits, lock in high gains.</td></tr>
+                <tr><td><span class="badge badge-blue">T3 (20%)</span></td><td><code>Entry + 4.0 * (Entry - StopLoss)</code></td><td>Trail remaining 20% with 20-day SMA.</td></tr>
+            </table>
+        </div>
+
+        <!-- 6. REBOUND SCANNER -->
+        <div id="rebound_scanner" class="section">
+            <div class="header-title">52-Week Rebound Screener</div>
+            <div class="subtitle">screen_rebound_candidates.py</div>
+            <p>Bottom-fishing engine. Identifies fundamentally solvent companies whose share prices have plummeted directly onto their 52-week support floors with extreme oversold indicators.</p>
+            <div class="scenario-box">
+                <div class="scenario-header">📉 Rebound Criteria</div>
+                <p>1. Stock is down > 30% from its 52-week high.<br>
+                2. Stock is trading within 2% of its 52-week low.<br>
+                3. RSI(14) is below 35 (Deep value zone).<br>
+                4. Outputs candidates directly to <code>rebound_stock_candidates.csv</code> for manual watchlist validation.</p>
+            </div>
+        </div>
+
+        <!-- 7. FUNDAMENTAL SCREENER -->
+        <div id="fundamental_screener" class="section">
+            <div class="header-title">Fundamental Support Screener</div>
+            <div class="subtitle">screen_fundamental_support_stocks.py</div>
+            <p>Scans the underlying balance sheets and quarterly revenue/profit statements. Filters out debt-ridden entities and isolates financially strong companies undergoing temporary price distress.</p>
+        </div>
+
+        <!-- 8. NEWS NLP -->
+        <div id="news_nlp" class="section">
+            <div class="header-title">News NLP & Sentiment Analyzer</div>
+            <div class="subtitle">news_analysis/company_news_analyzer.py</div>
+            <p>Pulls live Google News RSS feeds, scrubs raw HTML, and extracts sentiment tags using a targeted financial lexicon.</p>
+
+            <div class="scenario-box">
+                <div class="scenario-header">📰 Example Keyword Analysis</div>
+                <pre><code><span class="cm"># Negative Red-Flags Lexicon</span>
+NEGATIVE_PHRASES = [
+    <span class="str">"downgrades"</span>, <span class="str">"probe"</span>, <span class="str">"fraud"</span>, <span class="str">"scam"</span>,
+    <span class="str">"resigns"</span>, <span class="str">"sebi notice"</span>, <span class="str">"show cause"</span>, <span class="str">"loss widens"</span>
+]
+
+<span class="cm"># Positive Growth Catalysts Lexicon</span>
+POSITIVE_PHRASES = [
+    <span class="str">"surges"</span>, <span class="str">"record high"</span>, <span class="str">"bags order"</span>, <span class="str">"wins contract"</span>,
+    <span class="str">"profit jumps"</span>, <span class="str">"acquires"</span>, <span class="str">"upgrades"</span>, <span class="str">"bonus"</span>
+]</code></pre>
+            </div>
+        </div>
+
+        <!-- 9. TELEGRAM ALERTS -->
+        <div id="telegram_alerts" class="section">
+            <div class="header-title">Telegram Alert Dispatch</div>
+            <div class="subtitle">telegram_alerts/swing_trade_alert_sender.py</div>
+            <p>Converts signals into mobile-ready rich HTML trade cards sent through Telegram Bot API.</p>
+
+            <h2>Live Alert Preview Card</h2>
+            <div class="tg-card">
+                <b>┏━━ #1 HAL ━━━ <code>Breakout Setup</code></b><br>
+                ⭐ <b>Conviction Score:</b> 88/100<br>
+                🏷️ <b>NSE Cap Segment:</b> LARGE CAP<br>
+                ┃<br>
+                💵 <b>Buy / Entry:</b> ₹3,410.00<br>
+                🛑 <b>Stop Loss:</b> ₹3,250.00 <i>(-4.6%)</i><br>
+                ┃<br>
+                🎯 <b>Targets:</b><br>
+                &nbsp;&nbsp;🥇 <b>T1:</b> ₹3,650.00 <i>(+7.0%)</i> → <b>Book 50%</b><br>
+                &nbsp;&nbsp;🥈 <b>T2:</b> ₹3,810.00 <i>(+11.7%)</i> → <b>Book 30%</b><br>
+                &nbsp;&nbsp;🥉 <b>T3:</b> ₹4,050.00 <i>(+18.7%)</i> → <b>Trail 20%</b><br>
+                ┃<br>
+                🏛️ <b>Institutional Flow:</b> 🟢 DII Net Buying Active<br>
+                📰 <b>News Sentiment:</b> <span style="color:#34d399">POSITIVE</span><br>
+                &nbsp;&nbsp;• <i>"HAL signs deal worth ₹30,000 Cr with Ministry of Defence..."</i><br>
+                ┃<br>
+                📦 <b>Position Sizing:</b> <b>31 shares</b><br>
+                &nbsp;&nbsp;💰 Capital: ₹1,05,710 | 🛡️ Max Risk: ₹4,960<br>
+                ┃<br>
+                💡 <b>Technical Setup:</b><br>
+                &nbsp;&nbsp;📈 Strong Uptrend (Price above 20 & 50-day averages)<br>
+                &nbsp;&nbsp;🔥 Big Volume Surge (Institutional buying 2.1x avg)<br>
+                <b>┗━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+            </div>
+        </div>
+
+        <!-- 10. EXCEL BUILDERS -->
+        <div id="excel_builder" class="section">
+            <div class="header-title">Excel Recovery Reports</div>
+            <div class="subtitle">build_rebound_signal_excel.py & generate_portfolio_recovery_plan.py</div>
+            <p>Generates multi-tab Microsoft Excel workbooks using <code>openpyxl</code> with dynamic color-coding, frozen header panes, and pre-calculated target formulas.</p>
+        </div>
+
+        <!-- 11. CONFIGURATION -->
+        <div id="settings_config" class="section">
+            <div class="header-title">Configuration & Settings</div>
+            <div class="subtitle">configuration/swing_trade_settings.py</div>
+            <p>Stores API credentials, capital parameters, and critical security flags.</p>
+            <pre><code><span class="kw">class</span> <span class="fn">SwingTradeSettings</span>:
+    initial_capital: <span class="kw">float</span> = <span class="num">500000.0</span>       <span class="cm"># Total account capital</span>
+    risk_per_trade: <span class="kw">float</span> = <span class="num">0.01</span>           <span class="cm"># 1.0% maximum risk allocation</span>
+    signal_only: <span class="kw">bool</span> = <span class="kw">True</span>               <span class="cm"># SAFETY: Prevents unintended live order execution</span>
+    minimum_candidate_score: <span class="kw">float</span> = <span class="num">65.0</span>  <span class="cm"># Filter out low conviction setups</span></code></pre>
+        </div>
+
+        <!-- 12. MARKET UNIVERSE -->
+        <div id="market_universe" class="section">
+            <div class="header-title">Market Universe & Liquidity Filtering</div>
+            <div class="subtitle">stock_universe/nse_stock_universe.py & stock_universe/liquidity_ranker.py</div>
+            <p>Provides a solid foundation by securing highly liquid, pure equity candidates seamlessly before consuming heavy historical APIs.</p>
+
+            <div class="grid-layout">
+                <div class="card">
+                    <h3>✅ 1. Symbol Whitelisting</h3>
+                    <p>Rejects irrelevant instruments returned by the exchange API such as BEES, ETF, GILT, INFRASTRUCTURE INVESTMENT TRUST, MUTUAL FUNDS, etc. to retain pure single-name stocks.</p>
+                </div>
+                <div class="card">
+                    <h3>⚡ 2. Fast Quote Pre-Filter</h3>
+                    <p>Instead of downloading large historical datasets for thousands of names, a rapid quote batch request is fired using a <code>quote_traded_value</code> (Price × Volume). Top N symbols advance.</p>
+                </div>
+                <div class="card">
+                    <h3>🌊 3. Stage-2 Liquidity Baseline</h3>
+                    <p>After historical OHLCV comes in, final checks ensure the 20-day Average Traded Value (Turnover) exceeds a threshold strictly (e.g. 10,000,000 INR).</p>
+                </div>
+            </div>
+
+            <pre><code><span class="kw">def</span> <span class="fn">prefilter_by_quote_liquidity</span>(kite, stock_candidates, maximum_stocks=<span class="num">300</span>):
+    <span class="cm"># Batches symbols into groups of 200 to respect rate-limits</span>
+    <span class="cm"># Selects elements rapidly via Kite.quote()</span>
+    <span class="kw">for</span> batch <span class="kw">in</span> chunks:
+        quote_data = kite.quote(batch)
+        <span class="cm"># If quote filter evaluates zero stocks (Market close/holiday), it invokes Fallback</span>
+        <span class="cm"># from liquid_stocks_universe.py safely.</span>
+</code></pre>
+        </div>
+
+        <!-- 13. HISTORICAL DATA -->
+        <div id="historical_caching" class="section">
+            <div class="header-title">Historical Data & Caching Pipeline</div>
+            <div class="subtitle">zerodha_market_data/market_data_downloader.py</div>
+            <p>Prevents destructive API rate-limiting via resilient file-based caching and exponential backoff retry algorithms.</p>
+
+            <div class="scenario-box">
+                <h4>Data Fetch Logic</h4>
+                <ul>
+                    <li><b>Parquet / CSV Hybrid Cache:</b> Searches for local <code>NSE_SYMBOL_daily.parquet</code> or <code>.csv</code>. If its modification stamp is under <code>24 hours</code>, it skips network I/O.</li>
+                    <li><b>Self-Healing Re-Attemps:</b> Downloads missing records with up to 3 retries spacing via <code>delay = base * (2^attempt)</code> handling.</li>
+                    <li><b>Atomic Write:</b> Saves data via a temporary file (<code>.tmp.parquet</code>) prior to renaming it to guard against partial memory dumps during power outages.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 14. INSTITUTIONAL FLOW -->
+        <div id="fii_dii_flow" class="section">
+            <div class="header-title">FII/DII Institutional Engine</div>
+            <div class="subtitle">institutional_data/fii_dii_data_fetcher.py</div>
+            <p>Scrapes real-time overarching market buying and selling flows directly from the NSE India endpoints via Request headers.</p>
+
+            <div class="mock-telegram-card">
+                🏛️ <b>FII / DII Market Flow (Latest):</b><br>
+                ├─ 🔴 <b>DII Net:</b> -₹1,245.30 Cr<br>
+                ├─ 🟢 <b>FII Net:</b> +₹3,420.10 Cr<br>
+                └─ 🟢 <b>Combined Net:</b> +₹2,174.80 Cr<br>
+                <br>
+                🏦 Strong Institutional Accumulation (🔥 2.3x Volume Surge)
+            </div>
+
+            <p style="margin-top:20px">Uses an aggressive local memory cache <code>_FII_DII_CACHE</code> to lock values down per 1 hour TTL restricting API blockades.</p>
+        </div>
+
+    </div>
+
+    <!-- TAB SWITCH SCRIPT -->
+    <script>
+        function showTab(id) {
+            document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+
+            document.getElementById(id).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+    </script>
+</body>
+</html>

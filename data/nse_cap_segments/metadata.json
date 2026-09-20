@@ -1,0 +1,14 @@
+{
+  "snapshot_date": "2026-09-15",
+  "source": "NSE index constituent snapshot downloaded from niftyindices.com",
+  "files": {
+    "LARGE": "nifty100.csv",
+    "MID": "nifty_midcap150.csv",
+    "SMALL": "nifty_smallcap250.csv"
+  },
+  "counts": {
+    "LARGE": 100,
+    "MID": 150,
+    "SMALL": 249
+  }
+}
