@@ -1,0 +1,83 @@
+{
+  "execution": {
+    "timestamp": "2026-10-03T16:53:42.918621",
+    "script": "run_options_intraday_scan_powerful_sl",
+    "symbols_scanned": [
+      "RELIANCE",
+      "TCS",
+      "BPCL",
+      "BAJFINANCE",
+      "MARUTI",
+      "INFY"
+    ],
+    "num_symbols": 6,
+    "min_score": 50,
+    "qualified_candidates": 5,
+    "sl_strategy": "Powerful 4-Layer (Delta + Vol + Theta + Vega)",
+    "market_hours_check": false
+  },
+  "candidates": [
+    {
+      "symbol": "RELIANCE",
+      "strike": 1000,
+      "type": "CE",
+      "ltp": 50.0,
+      "score": 70,
+      "powerful_sl": 40.55,
+      "sl_risk": 9.45,
+      "quantity": 529,
+      "capital": 26450.0
+    },
+    {
+      "symbol": "TCS",
+      "strike": 1000,
+      "type": "CE",
+      "ltp": 50.0,
+      "score": 70,
+      "powerful_sl": 40.55,
+      "sl_risk": 9.45,
+      "quantity": 529,
+      "capital": 26450.0
+    },
+    {
+      "symbol": "BPCL",
+      "strike": 1000,
+      "type": "CE",
+      "ltp": 50.0,
+      "score": 70,
+      "powerful_sl": 40.55,
+      "sl_risk": 9.45,
+      "quantity": 529,
+      "capital": 26450.0
+    },
+    {
+      "symbol": "BAJFINANCE",
+      "strike": 1000,
+      "type": "CE",
+      "ltp": 50.0,
+      "score": 70,
+      "powerful_sl": 40.55,
+      "sl_risk": 9.45,
+      "quantity": 529,
+      "capital": 26450.0
+    },
+    {
+      "symbol": "MARUTI",
+      "strike": 1000,
+      "type": "PE",
+      "ltp": 65.0,
+      "score": 75,
+      "powerful_sl": 52.42,
+      "sl_risk": 12.58,
+      "quantity": 397,
+      "capital": 25805.0
+    }
+  ],
+  "sl_strategy": "Powerful 4-Layer (Delta + Vol + Theta + Vega)",
+  "summary": {
+    "total_candidates": 5,
+    "min_score_filtered": 50,
+    "sl_method": "Powerful 4-Layer Protection",
+    "whipsaw_protection": "YES - 4 defensive layers"
+  }
+}

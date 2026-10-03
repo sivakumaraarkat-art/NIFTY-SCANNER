@@ -1,0 +1,7 @@
+echo '0 9 * 1-12 1-5 cd /home/ubuntu/NiftyScanner/nifty_v14_7 && ./run_NIFTY_V14_9_PAPER.sh >> /home/ubuntu/NiftyScanner/nifty_v14_7/logs/cron_v14_9_$(date +\%Y\%m\%d).log 2>&1 # NIFTY_V14_9_CRON' > /tmp/cron_new
+echo '30 08 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 24 >> logs/cron_news.log 2>&1' >> /tmp/cron_new
+echo '12 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/btst_smart_exit_strategy.py --cron >> logs/cron_btst_exit.log 2>&1' >> /tmp/cron_new
+echo '50 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 50 >> logs/cron_intraday.log 2>&1' >> /tmp/cron_new
+echo '00 15 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 50 >> logs/cron_btst.log 2>&1' >> /tmp/cron_new
+echo '35 15 * * 5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/generate_weekly_audit.py >> logs/cron_audit.log 2>&1' >> /tmp/cron_new
+crontab /tmp/cron_new

@@ -1,0 +1,156 @@
+{
+  "execution": {
+    "timestamp": "2026-10-01T19:47:31.995808",
+    "script": "run_btst_options_scan_with_nifty",
+    "symbols_scanned": [
+      "RELIANCE",
+      "TCS",
+      "MARUTI",
+      "INFY",
+      "HDFCBANK"
+    ],
+    "num_symbols": 5,
+    "include_nifty": true,
+    "min_score": 50.0,
+    "qualified_candidates": 8,
+    "market_hours_check": false
+  },
+  "results": {
+    "stocks": [
+      {
+        "symbol": "RELIANCE",
+        "strike": 2350,
+        "type": "CE",
+        "ltp": 46.3,
+        "score": 60,
+        "delta": 0.55,
+        "theta": -0.29,
+        "theta_pct": 0.6263498920086392,
+        "entry_time": "3:00 PM - 3:25 PM",
+        "exit_time": "9:15 AM (Next Day)",
+        "position_size": "Calculated based on 1% risk rule",
+        "expected_move": "2-5%",
+        "note": "Slightly ITM for conviction"
+      },
+      {
+        "symbol": "TCS",
+        "strike": 3500,
+        "type": "CE",
+        "ltp": 52.4,
+        "score": 60,
+        "delta": 0.58,
+        "theta": -0.32,
+        "theta_pct": 0.6106870229007634,
+        "entry_time": "3:00 PM - 3:25 PM",
+        "exit_time": "9:15 AM (Next Day)",
+        "position_size": "Calculated based on 1% risk rule",
+        "expected_move": "2-5%",
+        "note": "Slightly ITM for conviction"
+      },
+      {
+        "symbol": "MARUTI",
+        "strike": 7850,
+        "type": "CE",
+        "ltp": 63.5,
+        "score": 60,
+        "delta": 0.52,
+        "theta": -0.28,
+        "theta_pct": 0.4409448818897638,
+        "entry_time": "3:00 PM - 3:25 PM",
+        "exit_time": "9:15 AM (Next Day)",
+        "position_size": "Calculated based on 1% risk rule",
+        "expected_move": "2-5%",
+        "note": "Slightly ITM for conviction"
+      },
+      {
+        "symbol": "INFY",
+        "strike": 2200,
+        "type": "CE",
+        "ltp": 48.2,
+        "score": 60,
+        "delta": 0.56,
+        "theta": -0.3,
+        "theta_pct": 0.6224066390041494,
+        "entry_time": "3:00 PM - 3:25 PM",
+        "exit_time": "9:15 AM (Next Day)",
+        "position_size": "Calculated based on 1% risk rule",
+        "expected_move": "2-5%",
+        "note": "Slightly ITM for conviction"
+      },
+      {
+        "symbol": "HDFCBANK",
+        "strike": 1800,
+        "type": "CE",
+        "ltp": 44.8,
+        "score": 60,
+        "delta": 0.54,
+        "theta": -0.27,
+        "theta_pct": 0.6026785714285715,
+        "entry_time": "3:00 PM - 3:25 PM",
+        "exit_time": "9:15 AM (Next Day)",
+        "position_size": "Calculated based on 1% risk rule",
+        "expected_move": "2-5%",
+        "note": "Slightly ITM for conviction"
+      }
+    ],
+    "index": [
+      {
+        "symbol": "NIFTY",
+        "strike": 25000,
+        "type": "CE",
+        "ltp": 180.5,
+        "score": 65,
+        "delta": 0.52,
+        "theta": -0.85,
+        "theta_pct": 0.47091412742382266,
+        "entry_time": "3:00 PM - 3:25 PM",
+        "exit_time": "9:15 AM (Next Day)",
+        "position_size": "Adjusted for index volatility",
+        "expected_move": "3-8% (larger than stocks)",
+        "advantage": "Broader market exposure, larger gap moves common",
+        "note": "Higher volatility, higher potential returns"
+      },
+      {
+        "symbol": "NIFTY",
+        "strike": 24900,
+        "type": "PE",
+        "ltp": 175.3,
+        "score": 65,
+        "delta": -0.55,
+        "theta": -0.82,
+        "theta_pct": 0.4677695379349685,
+        "entry_time": "3:00 PM - 3:25 PM",
+        "exit_time": "9:15 AM (Next Day)",
+        "position_size": "Adjusted for index volatility",
+        "expected_move": "3-8% (larger than stocks)",
+        "advantage": "Broader market exposure, larger gap moves common",
+        "note": "Higher volatility, higher potential returns"
+      },
+      {
+        "symbol": "BANKNIFTY",
+        "strike": 52500,
+        "type": "CE",
+        "ltp": 220.4,
+        "score": 65,
+        "delta": 0.54,
+        "theta": -1.05,
+        "theta_pct": 0.4764065335753176,
+        "entry_time": "3:00 PM - 3:25 PM",
+        "exit_time": "9:15 AM (Next Day)",
+        "position_size": "Adjusted for index volatility",
+        "expected_move": "3-8% (larger than stocks)",
+        "advantage": "Broader market exposure, larger gap moves common",
+        "note": "Higher volatility, higher potential returns"
+      }
+    ],
+    "summary": {
+      "total_candidates": 8,
+      "stock_options": 5,
+      "index_options": 3,
+      "avg_delta": 0.55,
+      "avg_theta": -0.3,
+      "execution_window": "2:30 PM - 3:25 PM IST",
+      "exit_window": "9:15 AM - 9:45 AM (Next Day)"
+    }
+  }
+}

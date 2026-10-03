@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-10-01T19:33:39.129914",
+  "script": "run_options_intraday_scan",
+  "symbols_scanned": [
+    "BPCL",
+    "HEROMOTOCO",
+    "BANKBARODA",
+    "ICICIBANK",
+    "TITAN"
+  ],
+  "num_symbols": 5,
+  "min_score": 50,
+  "qualified_candidates": 2,
+  "market_hours_check": false
+}

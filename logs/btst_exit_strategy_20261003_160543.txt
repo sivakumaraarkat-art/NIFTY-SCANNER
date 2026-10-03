@@ -1,0 +1,7 @@
+SMART BTST EXIT STRATEGY - COST-TO-COST OR BETTER
+====================================================================================================
+
+This guide ensures you exit BTST positions with maximum profit and minimum loss.
+Key principle: Never hold overnight crash, always exit on plan.
+
+Generated: 03-Oct-2026 16:05 PM

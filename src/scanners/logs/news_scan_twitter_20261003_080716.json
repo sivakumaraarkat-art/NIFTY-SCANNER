@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-10-03T02:37:16.578849+00:00",
+  "script": "news_scanner_with_twitter",
+  "hours_scanned": 24,
+  "rss_feeds": 11,
+  "twitter_queries": 7,
+  "total_sources": 18,
+  "symbols_found": 18,
+  "data": {
+    "BAJFINANCE": {
+      "avg_score": 77.8,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 5
+    },
+    "SBIN": {
+      "avg_score": 45.4,
+      "sentiment": "BEARISH \u2b07\ufe0f",
+      "article_count": 4
+    },
+    "NTPC": {
+      "avg_score": 75.0,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 2
+    },
+    "HDFCLIFE": {
+      "avg_score": 75.0,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 2
+    },
+    "WIPRO": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 2
+    },
+    "HDFCBANK": {
+      "avg_score": 55.1,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 5
+    },
+    "VEDL": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "KOTAKBANK": {
+      "avg_score": 56.2,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 4
+    },
+    "ADANIPORTS": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "TCS": {
+      "avg_score": 74.9,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 3
+    },
+    "RELIANCE": {
+      "avg_score": 62.5,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 4
+    },
+    "COALINDIA": {
+      "avg_score": 75.0,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 1
+    },
+    "CIPLA": {
+      "avg_score": 50.2,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 2
+    },
+    "EICHERMOT": {
+      "avg_score": 75.0,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 1
+    },
+    "PNB": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "MARUTI": {
+      "avg_score": 49.8,
+      "sentiment": "BEARISH \u2b07\ufe0f",
+      "article_count": 1
+    },
+    "INFY": {
+      "avg_score": 49.8,
+      "sentiment": "BEARISH \u2b07\ufe0f",
+      "article_count": 1
+    },
+    "BPCL": {
+      "avg_score": 99.8,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 1
+    }
+  }
+}

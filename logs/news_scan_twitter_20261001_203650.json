@@ -1,0 +1,136 @@
+{
+  "timestamp": "2026-10-01T15:06:50.313059+00:00",
+  "script": "news_scanner_with_twitter",
+  "hours_scanned": 48,
+  "rss_feeds": 11,
+  "twitter_queries": 7,
+  "total_sources": 18,
+  "symbols_found": 25,
+  "data": {
+    "RELIANCE": {
+      "avg_score": 69.5,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 10
+    },
+    "INFY": {
+      "avg_score": 74.8,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 8
+    },
+    "HDFCBANK": {
+      "avg_score": 65.4,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 15
+    },
+    "KOTAKBANK": {
+      "avg_score": 65.5,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 5
+    },
+    "SBIN": {
+      "avg_score": 59.7,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 2
+    },
+    "TATAMOTORS": {
+      "avg_score": 57.7,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 2
+    },
+    "TITAN": {
+      "avg_score": 75.1,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 1
+    },
+    "M&M": {
+      "avg_score": 25.0,
+      "sentiment": "BEARISH \u2b07\ufe0f",
+      "article_count": 1
+    },
+    "TCS": {
+      "avg_score": 64.0,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 5
+    },
+    "GRASIM": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "EICHERMOT": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "APOLLOHOSP": {
+      "avg_score": 75.0,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 1
+    },
+    "TATACONSUM": {
+      "avg_score": 42.7,
+      "sentiment": "BEARISH \u2b07\ufe0f",
+      "article_count": 2
+    },
+    "MARUTI": {
+      "avg_score": 55.7,
+      "sentiment": "BEARISH \u2b07\ufe0f",
+      "article_count": 3
+    },
+    "HCLTECH": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "SUNPHARMA": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "NESTLEIND": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "HDFCLIFE": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "WIPRO": {
+      "avg_score": 56.2,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 2
+    },
+    "ULTRACEMCO": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "BANKBARODA": {
+      "avg_score": 86.3,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 1
+    },
+    "BHARTIARTL": {
+      "avg_score": 29.8,
+      "sentiment": "BEARISH \u2b07\ufe0f",
+      "article_count": 1
+    },
+    "COALINDIA": {
+      "avg_score": 50.0,
+      "sentiment": "NEUTRAL \u27a1\ufe0f",
+      "article_count": 1
+    },
+    "ICICIBANK": {
+      "avg_score": 76.6,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 1
+    },
+    "BPCL": {
+      "avg_score": 99.8,
+      "sentiment": "BULLISH \u2b06\ufe0f",
+      "article_count": 1
+    }
+  }
+}
