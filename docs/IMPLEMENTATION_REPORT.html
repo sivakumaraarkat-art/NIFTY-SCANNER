@@ -1444,11 +1444,14 @@ NEXT DAY 9:30 AM:
                     
                     <h5 style="margin-top:15px">Active Crontab Schedule (Weekdays only: 1-5):</h5>
                     <div class="code-block" style="margin-top: 5px;">
-# 1. MORNING (08:30 AM): Pre-Market News Catalyst Scanner
-30 08 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 48 >> logs/cron_news.log 2>&1
+# 1. MORNING (08:30 AM): Pre-Market News Catalyst Scanner (For Intraday)
+30 08 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 48 >> logs/cron_news_am.log 2>&1
 
 # 2. MORNING (09:12 AM): BTST Smart Exit Monitor
-12 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/run_btst_exit_monitor.py >> logs/cron_btst_exit.log 2>&1
+12 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/btst_smart_exit_strategy.py --cron >> logs/cron_btst_exit.log 2>&1
+
+# 2.5 AFTERNOON (02:30 PM): Fresh News Catalyst Scanner (For BTST)
+30 14 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 8 >> logs/cron_news_pm.log 2>&1
 
 # 3. MID-MORNING (09:50 AM): Intraday Options Engine
 50 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/venv/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 50 >> logs/cron_intraday.log 2>&1
