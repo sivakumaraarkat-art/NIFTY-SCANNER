@@ -1142,13 +1142,14 @@ WIPRO        NEUTRAL ➡️           55.0         4         ← RSS disagrees w
                             <strong>Script:</strong> run_options_intraday_scan_powerful_sl.py<br>
                             <strong>Command:</strong><br>
                             <div class="code-block">python "D:/NiftyScanner/STOCK_SWING_V1_updated/src/scanners/run_options_intraday_scan_powerful_sl.py" \
-  --symbols RELIANCE,MARUTI,BPCL,KOTAKBANK,ONGC \
+  --use-news-candidates \
   --min-score 50</div>
                             <strong>What It Does:</strong>
                             <ul style="margin-left: 20px; margin-top: 10px;">
                                 <li>Connects to Zerodha KiteConnect API</li>
-                                <li>Reads 08:30 AM <strong>news predictions JSON</strong> output</li>
-                                <li>Only fetches live option chains for Top Bullish Symbols</li>
+                                <li>Reads 08:30 AM <strong>news predictions JSON</strong> output automatically</li>
+                                <li><strong>⭐ NEW OMNI-DIRECTIONAL LOGIC:</strong> Fetches live option chains for both <strong>Bullish</strong> and <strong>Bearish</strong> candidates.</li>
+                                <li>Dynamically targets <strong>CE (Calls)</strong> for Bulls and <strong>PE (Puts)</strong> for Bears based on matching Greek profiles.</li>
                                 <li>Calculates Greeks (Delta, Theta, IV)</li>
                                 <li>Applies liquidity filters (OI >= 1000, spread <= 2%)</li>
                                 <li>Runs 100-point scoring engine</li>
@@ -1213,7 +1214,7 @@ WIPRO        NEUTRAL ➡️           55.0         4         ← RSS disagrees w
                             <strong>⚠️ CRITICAL WINDOW - LAST 55 MINUTES OF TRADING</strong><br>
                             <strong>Command:</strong><br>
                             <div class="code-block">python "D:/NiftyScanner/STOCK_SWING_V1_updated/src/scanners/run_btst_options_scan_powerful_sl.py" \
-  --symbols RELIANCE,MARUTI,BPCL,HDFCBANK,INFY \
+  --use-news-candidates \
   --min-score 50</div>
                             <strong>What It Does (BTST-Specific):</strong>
                             <ul style="margin-left: 20px; margin-top: 10px;">
@@ -1399,9 +1400,9 @@ Return: 30.4% on ₹22,080 capital ✅
          └─ Output: RELIANCE(+8.5), MARUTI(+7.2), BPCL(+6.8) BULLISH
 
 9:50 AM  ├─ Run: python "D:/NiftyScanner/STOCK_SWING_V1_updated/src/scanners/run_options_intraday_scan_powerful_sl.py" \
-         │        --symbols RELIANCE,MARUTI,BPCL,KOTAKBANK,ONGC \
+         │        --use-news-candidates \
          │        --min-score 50
-         └─ Output: 3 candidates (scores: 95, 89, 75)
+         └─ Output: 3 candidates (BULLS in CE, BEARS in PE)
          └─ Action: Execute 2 trades (95 & 89 scores)
 
 11:00 AM ├─ Monitor positions
@@ -1412,7 +1413,7 @@ Return: 30.4% on ₹22,080 capital ✅
          └─ Look for fresh momentum
 
 3:10 PM  ├─ Run: python "D:/NiftyScanner/STOCK_SWING_V1_updated/src/scanners/run_btst_options_scan_powerful_sl.py" \
-         │        --symbols RELIANCE,MARUTI,BPCL,HDFCBANK,INFY \
+         │        --use-news-candidates \
          │        --min-score 50
          └─ Output: 2 BTST candidates
          └─ Action: Buy for overnight (hold T to T+1)
