@@ -681,13 +681,27 @@ Result: Lock profit while managing remaining risk!</div>
 
                 <h3 style="margin-top: 30px; color: #667eea;">📋 Files Created (Complete Package)</h3>
                 <ul class="feature-list">
+                    <li><strong>options_data_provider.py</strong> <span class="badge-new">NEW</span> - Live Kite Market Resolution, Real ATM Strikes, NFO Master Cache, Analytical Black-Scholes Greeks, & Exchange Lot Sizing</li>
                     <li><strong>powerful_sl_module.py</strong> - Core 4-layer calculation engine</li>
-                    <li><strong>run_options_intraday_scan_powerful_sl.py</strong> - Intraday scanner with Powerful SL</li>
-                    <li><strong>run_btst_options_scan_powerful_sl.py</strong> - BTST scanner + NIFTY support</li>
+                    <li><strong>run_options_intraday_scan_powerful_sl.py</strong> - Intraday scanner with live market ATM strike selection & Powerful SL</li>
+                    <li><strong>run_btst_options_scan_powerful_sl.py</strong> - BTST scanner with live market ATM strike selection & Index support</li>
                     <li><strong>btst_smart_exit_strategy.py</strong> - Tomorrow morning exit decision engine</li>
                     <li><strong>POWERFUL_SL_STRATEGY.md</strong> - Complete documentation</li>
                     <li><strong>BTST_DOWNSIDE_PROTECTION.md</strong> - Gap down scenarios & rolling strategy</li>
                 </ul>
+
+                <h3 style="margin-top: 30px; color: #667eea;">🎯 Real-Time ATM Strike & Live Market Engine (October 2026)</h3>
+                <div class="improvement-card" style="border-left-color: #10b981;">
+                    <h4>✅ Elimination of Static Strikes (No more 1000 strike / ₹50 dummy placeholders)</h4>
+                    <p>Previously, options scanners relied on static mock strike generators. The newly implemented <code>options_data_provider.py</code> integrates directly with Zerodha Kite & NFO Instrument Master to deliver genuine live trading execution:</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><strong>Live Spot Price Fetching:</strong> Automatically retrieves live underlying spot prices (e.g. BPCL: ₹302.20, RELIANCE: ₹1,177.40, MARUTI: ₹11,380, NIFTY: ₹22,550).</li>
+                        <li><strong>Dynamic ATM Strike Selection:</strong> Queries 34,000+ NFO instrument contracts to select the exact At-The-Money (or closest liquid) strike for the nearest active monthly/weekly expiry.</li>
+                        <li><strong>Omni-Directional Contract Resolution:</strong> Accurately resolves <code>CE</code> contracts for Bullish news catalysts and <code>PE</code> contracts for Bearish news catalysts.</li>
+                        <li><strong>Live Option LTP & Black-Scholes Greeks:</strong> Inverts Black-Scholes to compute accurate Implied Volatility (IV), Delta, daily Theta decay, and Vega for precise 4-layer stop loss calculation.</li>
+                        <li><strong>Exchange Lot-Sizing Position Calculator:</strong> Scales capital requirement and risk strictly by official exchange lot sizes (e.g., BPCL 1975/lot, RELIANCE 500/lot, MARUTI 50/lot, NIFTY 65/lot).</li>
+                    </ul>
+                </div>
 
                 <h3 style="margin-top: 30px; color: #667eea;">🎯 Exit Decision Tomorrow Morning</h3>
                 <div class="code-block">
@@ -826,6 +840,18 @@ python "D:/NiftyScanner/STOCK_SWING_V1_updated/src/scanners/btst_smart_exit_stra
                             <td>Curated market insights</td>
                             <td>Real-time</td>
                         </tr>
+                        <tr>
+                            <td><strong>StockEdge Blog</strong></td>
+                            <td>Research & Education Feed</td>
+                            <td>Technical analysis, IPO checks, valuation</td>
+                            <td>Daily</td>
+                        </tr>
+                        <tr>
+                            <td><strong>StockEdge Insights</strong></td>
+                            <td>NSE Stock Search Feed</td>
+                            <td>Breakout screening, RSI trends, F&O insights</td>
+                            <td>Real-time</td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -934,6 +960,12 @@ python "D:/NiftyScanner/STOCK_SWING_V1_updated/src/scanners/btst_smart_exit_stra
                             <td>Capital flow predictions</td>
                             <td>Minutes</td>
                         </tr>
+                        <tr>
+                            <td><strong>StockEdge Analysts</strong></td>
+                            <td>StockEdge analysis & scan</td>
+                            <td>Technical chart setups, RSI & volume breakouts</td>
+                            <td>Real-time</td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -1034,6 +1066,48 @@ Time 2:40 PM: Combined Signal
                     </div>
                 </div>
 
+                <h3 style="margin-top: 40px; color: #667eea;">🛡️ Anti-Fake News Shield & Sentiment Driver Engine (October 2026)</h3>
+
+                <div class="improvement-card" style="border-left-color: #3b82f6;">
+                    <h4>1. Plain-English "Why Positive / Negative" Catalyst Engine</h4>
+                    <p>Instead of just displaying numbers or raw sentiment strings, the scanner automatically parses news body and social streams to explain the underlying corporate or technical catalysts in plain English:</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><strong>Earnings Beat / Miss:</strong> Identifies quarterly revenue, profit, or margin expansions vs. misses.</li>
+                        <li><strong>Order Wins & Expansion:</strong> Pinpoints multi-crore defense, infrastructure, or commercial contracts.</li>
+                        <li><strong>Brokerage Action:</strong> Detects target price upgrades (Jefferies, Goldman, Morgan Stanley) or downgrades.</li>
+                        <li><strong>Technical Breakouts:</strong> Recognizes all-time highs, volume surges, and key resistance breaches.</li>
+                        <li><strong>Macro Headwinds & Tariffs:</strong> Identifies FII institutional selling, currency impacts, and regulatory risks (SEBI).</li>
+                    </ul>
+                </div>
+
+                <div class="improvement-card" style="border-left-color: #ef4444; margin-top: 20px;">
+                    <h4>2. Multi-Tier Anti-Fake News & Spam Protection</h4>
+                    <p>Protects traders from pump-and-dump rumors, social media tip channels, and unverified single-post traps:</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><strong>Spam Pattern Filter:</strong> Filters out promotional patterns (<code>telegram</code>, <code>whatsapp</code>, <code>jackpot call</code>, <code>sure shot</code>, <code>100% guaranteed</code>, <code>multibagger tip</code>).</li>
+                        <li><strong>Tier-1 Financial Media Corroboration:</strong> Prioritizes verified Tier-1 sources (Moneycontrol, ET Markets, Livemint, NDTV Profit, Hindu Business Line, Zerodha Pulse, BBC, CNBC).</li>
+                        <li><strong>Credibility Tiers:</strong>
+                            <ul style="margin-top: 5px; margin-left: 20px;">
+                                <li><code>🛡️ HIGH</code> — Multi-Source Verified (Tier-1 Financial Media corroborated)</li>
+                                <li><code>⚖️ MEDIUM</code> — Tier-1 News or Corroborated Social mentions</li>
+                                <li><code>⚠️ LOW</code> — Single Social mention (marked for verification)</li>
+                            </ul>
+                        </li>
+                        <li><strong>Contradiction & Conflict Guard:</strong> Flags stocks with conflicting simultaneous bullish and bearish news with <code>⚠️ AVOID (Conflicting News)</code>.</li>
+                    </ul>
+                </div>
+
+                <div class="improvement-card" style="border-left-color: #10b981; margin-top: 20px;">
+                    <h4>3. Automated Overwrite Excel Report (<code>latest_news_sentiment.xlsx</code>)</h4>
+                    <p>Each time the scanner executes, it automatically generates and cleanly overwrites <code>reports/latest_news_sentiment.xlsx</code> (and mirrors to root <code>latest_news_sentiment.xlsx</code> with dual-fallback Excel lock protection):</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><strong>Dark Navy Title & Header Banners:</strong> Professional color-coded tables with frozen panes at Row 7.</li>
+                        <li><strong>Options Action Targets:</strong> Direct recommendation badges (<code>🟢 BUY ATM / OTM CE</code>, <code>🔴 BUY ATM / OTM PE</code>, <code>⚠️ AVOID</code>).</li>
+                        <li><strong>Driver Explanation Columns:</strong> Full plain-English catalyst explanations and top source headlines with text-wrapping.</li>
+                        <li><strong>News Received / Published Time (IST):</strong> Exact publication timestamp in Indian Standard Time along with relative elapsed time (e.g. <code>03-Oct 07:29 PM (Just now)</code> or <code>03-Oct 12:56 PM (6h ago)</code>) replaces generic scanner run times.</li>
+                    </ul>
+                </div>
+
                 <h3 style="margin-top: 40px; color: #667eea;">🚀 Using This in Your Trading</h3>
 
                 <div class="improvement-card" style="border-left-color: #4ade80;">
@@ -1043,18 +1117,19 @@ python "D:/NiftyScanner/STOCK_SWING_V1_updated/src/scanners/news_scanner_with_tw
                     </div>
                     <h4 style="margin-top: 15px;">Output Example:</h4>
                     <div class="code-block">
-================================================================================
-SYMBOL       SENTIMENT            AVG SCORE    ARTICLES
-================================================================================
-RELIANCE     BULLISH ⬆️           89.7         7
-INFY         BULLISH ⬆️           87.2         9         ← RSS + Twitter agree
-TCS          BULLISH ⬆️           82.5         6
-MARUTI       BEARISH ⬇️           45.3         5
-WIPRO        NEUTRAL ➡️           55.0         4         ← RSS disagrees with Twitter
-================================================================================
+============================================================================================================================================
+SYMBOL       SENTIMENT      ACTION                   SCORE   TIER           CATALYST               WHY POSITIVE / NEGATIVE
+============================================================================================================================================
+TCS          BULLISH ⬆️     🟢 BUY ATM / OTM CE       84.6    🛡️ HIGH        Earnings Beat          Strong quarterly results beat analyst estimates...
+             └─ 📰 [03-Oct 07:29 PM (Just now)] TCS results beat expectations, strong buying momentum expected (ET Markets, Livemint, Twitter)
+BAJFINANCE   BULLISH ⬆️     🟢 BUY ATM / OTM CE       74.9    🛡️ HIGH        Brokerage Upgrade      Top institutional brokerages upgraded rating...
+             └─ 📰 [03-Oct 03:37 PM (3h 50m ago)] Bajaj Finance shares: Jefferies top stock pick — 35% upside seen (ET Markets, Livemint)
+HINDALCO     BULLISH ⬆️     🟢 BUY ATM / OTM CE       80.1    ⚖️ MEDIUM      Bullish Momentum       Positive news sentiment and buying interest...
+             └─ 📰 [03-Oct 12:01 PM (7h 27m ago)] Copper boom stocks: Hindustan Copper, Vedanta Aluminium, Hindustan Zinc... (Livemint)
+============================================================================================================================================
                     </div>
                     <h4 style="margin-top: 15px;">Next Step:</h4>
-                    <p>Feed top 3-5 symbols to <strong>intraday scanner</strong> with min-score 50+</p>
+                    <p>Open <code>latest_news_sentiment.xlsx</code> for a clear spreadsheet overview or feed symbols into the Intraday / BTST options scanners.</p>
                 </div>
 
                 <h3 style="margin-top: 40px; color: #667eea;">📋 Complete Sources Summary</h3>
@@ -1062,8 +1137,8 @@ WIPRO        NEUTRAL ➡️           55.0         4         ← RSS disagrees w
                 <div class="improvement-card">
                     <h4>Total News Coverage:</h4>
                     <ul style="margin-left: 20px;">
-                        <li>✅ <strong>11 RSS Feeds</strong> from top Indian & global sources</li>
-                        <li>✅ <strong>7 Twitter Queries</strong> monitoring Indian trader sentiment</li>
+                        <li>✅ <strong>13 RSS Feeds</strong> from top Indian & global sources (including StockEdge)</li>
+                        <li>✅ <strong>8 Twitter/Social Queries</strong> monitoring Indian trader sentiment & StockEdge analysis</li>
                         <li>✅ <strong>Real-time updates</strong> on market catalysts</li>
                         <li>✅ <strong>Combined scoring</strong> for better predictions</li>
                         <li>✅ <strong>JSON logging</strong> with audit trail</li>

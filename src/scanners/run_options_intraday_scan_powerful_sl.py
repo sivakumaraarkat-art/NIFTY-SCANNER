@@ -3,50 +3,69 @@ INTRADAY OPTIONS SCANNER — WITH POWERFUL 4-LAYER SL STRATEGY
 ═════════════════════════════════════════════════════════════════
 
 Enhancements:
-1. ✅ Powerful 4-Layer SL (prevents whipsaw at 98-99 bouncing to 105)
-2. ✅ Timeout protection on Zerodha API calls
-3. ✅ Liquidity filter (MIN_OI + bid-ask spread checks)
-4. ✅ Proper Greeks failure handling (skip on error, don't score)
+1. ✅ Live Kite Market Resolution: Real ATM strikes, real live Option LTP & Greeks
+2. ✅ Powerful 4-Layer SL (prevents whipsaw at 98-99 bouncing to 105)
+3. ✅ Omni-Directional Support: CE for Bullish candidates, PE for Bearish candidates
+4. ✅ Exchange Lot-Sizing: Accurate lot-based position sizing via 1% risk rule
 5. ✅ Anti-Whipsaw Features (trailing SL, breakeven exit, partial exit)
-6. ✅ Position sizing with 1% risk rule
-7. ✅ Execution logging to JSON
-8. ✅ Market hours guard
-
-4-Layer SL Protection:
-  Layer 1: Delta-Based Foundation (tight base using delta)
-  Layer 2: Volatility Buffer (IV adjustment - high vol = wider buffer)
-  Layer 3: Theta Shield (time decay protection)
-  Layer 4: Vega Insurance (IV crush protection)
-
-Result: SL at 86.75 instead of 80.00 (much tighter + protected from bounce!)
+6. ✅ Execution logging to JSON
+7. ✅ Weekend & NSE Holiday Guard
+8. ✅ Mobile-optimized Telegram alert dispatch
 
 Usage:
-    python run_options_intraday_scan_powerful_sl.py --symbols RELIANCE,TCS --min-score 50
+    python src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 50
+    python src/scanners/run_options_intraday_scan_powerful_sl.py --symbols RELIANCE,TCS,BPCL --min-score 50
 """
 
 from __future__ import annotations
 
 import sys, io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    except Exception:
+        pass
 
 import argparse
-import sys
 import json
 import time
 import os
 import glob
 from datetime import datetime, time as time_type, timedelta
 from pathlib import Path
+from typing import Dict, List, Any
+
+# Ensure project root in sys.path
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 try:
     from telegram_alerts.options_alert_sender import send_options_telegram_alerts
 except ImportError:
     send_options_telegram_alerts = lambda *args, **kwargs: None
-from typing import Dict, List
+
+try:
+    from src.scanners.options_data_provider import (
+        resolve_all_candidates,
+        resolve_option_candidate,
+        calculate_powerful_sl_engine,
+        get_kite_client,
+        get_nfo_instruments,
+    )
+except ImportError:
+    from options_data_provider import (
+        resolve_all_candidates,
+        resolve_option_candidate,
+        calculate_powerful_sl_engine,
+        get_kite_client,
+        get_nfo_instruments,
+    )
 
 
 # ──────────────────────────────────────────────────────────────
-# IMPROVEMENT 1: WEEKEND & HOLIDAY GUARD
+# 1. WEEKEND & HOLIDAY GUARD
 # ──────────────────────────────────────────────────────────────
 NSE_HOLIDAYS_2026 = [
     datetime(2026, 1, 26),   # Republic Day
@@ -69,30 +88,23 @@ NSE_HOLIDAYS_2026 = [
 def is_trading_day() -> bool:
     """Check if today is a valid NSE trading day."""
     today = datetime.now()
-
-    # Weekend check
     if today.weekday() >= 5:  # Saturday=5, Sunday=6
         return False
-
-    # Holiday check
     today_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
     if today_date in NSE_HOLIDAYS_2026:
         return False
-
     return True
 
 
 # ──────────────────────────────────────────────────────────────
-# IMPROVEMENT 2: LOG ROTATION (Auto-cleanup old logs)
+# 2. LOG ROTATION
 # ──────────────────────────────────────────────────────────────
 def cleanup_old_logs(log_dir: Path = Path("logs"), days_to_keep: int = 30) -> None:
     """Delete log files older than specified days."""
     if not log_dir.exists():
         return
-
     now = datetime.now()
     cutoff = now - timedelta(days=days_to_keep)
-
     deleted_count = 0
     try:
         for log_file in log_dir.glob("*.json"):
@@ -101,298 +113,122 @@ def cleanup_old_logs(log_dir: Path = Path("logs"), days_to_keep: int = 30) -> No
                 if file_mtime < cutoff:
                     log_file.unlink()
                     deleted_count += 1
-            except Exception as e:
-                pass  # Skip files we can't delete
-
+            except Exception:
+                pass
         if deleted_count > 0:
             print(f"🗑️  Log rotation: Cleaned up {deleted_count} log files older than {days_to_keep} days")
-    except Exception as e:
-        pass  # Don't fail if cleanup has issues
+    except Exception:
+        pass
 
 
-# ──────────────────────────────────────────────────────────────
-# POWERFUL SL MODULE (4-Layer Protection)
-# ──────────────────────────────────────────────────────────────
-
-def get_market_volatility(iv: float) -> str:
-    """Determine market volatility level based on IV."""
-    if iv > 30:
-        return "extreme"
-    elif iv > 20:
-        return "volatile"
-    else:
-        return "normal"
-
-
-def calculate_powerful_sl(
-    entry_price: float,
-    delta: float,
-    iv: float,
-    theta: float,
-    vega: float,
-    option_type: str = "CE",
-    days_held: float = 1.0,
-) -> Dict:
-    """
-    Calculate 4-layer protective SL to prevent whipsaw.
-
-    Layers:
-      1. Delta-Based Foundation: Tight base using delta
-      2. Volatility Buffer: Adjust for IV (high IV = wider)
-      3. Theta Shield: Protect from time decay
-      4. Vega Insurance: Protect from IV crush
-    """
-
-    # Normalize values
-    iv_pct = iv / 100 if iv > 1 else iv
-    theta_abs = abs(theta)
-    vega_abs = abs(vega)
-
-    # Determine multipliers based on market volatility
-    market_vol = get_market_volatility(iv)
-
-    if market_vol == "normal":
-        delta_multiplier = 0.18
-        theta_multiplier = 1.5
-        vega_multiplier = 5
-    elif market_vol == "volatile":
-        delta_multiplier = 0.20
-        theta_multiplier = 2.0
-        vega_multiplier = 5
-    else:  # extreme
-        delta_multiplier = 0.22
-        theta_multiplier = 2.5
-        vega_multiplier = 7.5
-
-    # ─────────────────────────────────────────────────────────────
-    # LAYER 1: Delta-Based Foundation
-    # ─────────────────────────────────────────────────────────────
-    adj_delta = abs(delta)
-    base_sl = entry_price * (1 - adj_delta * delta_multiplier)
-    layer1_buffer = entry_price - base_sl
-
-    # ─────────────────────────────────────────────────────────────
-    # LAYER 2: Volatility Buffer
-    # ─────────────────────────────────────────────────────────────
-    if iv_pct > 0.20:
-        vol_buffer = (iv_pct / 0.20) * entry_price * 0.05
-    else:
-        vol_buffer = 0
-
-    # ─────────────────────────────────────────────────────────────
-    # LAYER 3: Theta Shield
-    # ─────────────────────────────────────────────────────────────
-    theta_buffer = theta_abs * days_held * theta_multiplier
-
-    # ─────────────────────────────────────────────────────────────
-    # LAYER 4: Vega Insurance
-    # ─────────────────────────────────────────────────────────────
-    vega_buffer = vega_abs * vega_multiplier
-
-    # ─────────────────────────────────────────────────────────────
-    # FINAL SL
-    # ─────────────────────────────────────────────────────────────
-    total_buffer = layer1_buffer + vol_buffer + theta_buffer + vega_buffer
-    powerful_sl = entry_price - total_buffer
-
-    # Safety: SL should not exceed entry price
-    powerful_sl = max(powerful_sl, entry_price * 0.80)
-
-    # Anti-Whipsaw Features
-    trailing_trigger = entry_price * 1.05  # +5%
-    trailing_sl_new = powerful_sl + (entry_price * 1.05 - entry_price) * 0.5
-
-    return {
-        "entry_price": entry_price,
-        "base_sl": base_sl,
-        "layer1_buffer": layer1_buffer,
-        "layer2_vol_buffer": vol_buffer,
-        "layer3_theta_buffer": theta_buffer,
-        "layer4_vega_buffer": vega_buffer,
-        "total_buffer": total_buffer,
-        "powerful_sl": round(powerful_sl, 2),
-        "sl_risk": round(entry_price - powerful_sl, 2),
-        "sl_risk_pct": round((entry_price - powerful_sl) / entry_price * 100, 2),
-        "trailing_trigger": round(trailing_trigger, 2),
-        "trailing_sl_new": round(trailing_sl_new, 2),
-        "market_volatility": market_vol,
-    }
-
-
-# ──────────────────────────────────────────────────────────────
-# UTILITY FUNCTIONS
-# ──────────────────────────────────────────────────────────────
-
-def is_market_hours(script_type: str = "intraday") -> bool:
-    """Check if current time is valid for this scanner."""
+def is_market_hours() -> bool:
+    """Check if current time is within market operating window."""
     now = datetime.now().time()
-
-    if script_type == "intraday":
-        # 9:30 AM to 3:30 PM
-        return time_type(9, 30) <= now <= time_type(15, 30)
-
-    return False
-
-
-def export_scan_config(args, result_count: int, symbols_scanned: list[str]) -> dict:
-    """Export scan configuration for audit trail."""
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "script": "run_options_intraday_scan_powerful_sl",
-        "symbols_scanned": symbols_scanned,
-        "num_symbols": len(symbols_scanned),
-        "min_score": args.min_score,
-        "qualified_candidates": result_count,
-        "sl_strategy": "Powerful 4-Layer (Delta + Vol + Theta + Vega)",
-        "market_hours_check": is_market_hours("intraday"),
-    }
+    return time_type(9, 15) <= now <= time_type(15, 30)
 
 
 # ──────────────────────────────────────────────────────────────
-# SAMPLE CANDIDATES (For Demonstration)
+# 3. NEWS SYMBOLS PARSER
 # ──────────────────────────────────────────────────────────────
+def get_latest_news_symbols(log_dir: Path) -> list:
+    """Fetch BOTH Bullish and Bearish symbols dynamically from the morning News Scanner."""
+    if not log_dir.exists():
+        return []
+    news_files = list(log_dir.glob("news_scan_*.json"))
+    if not news_files:
+        return []
+    latest_file = max(news_files, key=lambda f: f.stat().st_mtime)
+    try:
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"⚠️ Error reading news log: {e}")
+        return []
 
-def generate_sample_intraday_candidates(syms: list) -> list[dict]:
-    """Generate sample intraday candidates with Greeks mapped to CE/PE."""
-    candidates = []
-    for item in syms:
-        # Backwards compatibility check
-        if isinstance(item, tuple):
-            symbol, sentiment = item
-        else:
-            symbol, sentiment = item, "BULLISH"
-            
-        opt_type = "PE" if "BEARISH" in sentiment else "CE"
-        delta_val = -0.55 if opt_type == "PE" else 0.55
-        
-        candidates.append({
-            "symbol": symbol,
-            "strike": 1000,
-            "option_type": opt_type,
-            "ltp": 65.00 if opt_type == "PE" else 50.00,
-            "delta": delta_val,
-            "theta": -0.35,
-            "vega": 0.10,
-            "iv": 22 if opt_type == "CE" else 26, # PE usually has slightly higher IV
-            "score": 75 if opt_type == "PE" else 70,
-            "sentiment_catalyst": sentiment,
-        })
-    return candidates
+    symbols_with_sentiment = []
+    if "data" in data and isinstance(data["data"], dict):
+        for sym, d in data["data"].items():
+            sent = d.get("sentiment", "")
+            if "BULLISH" in sent or "BEARISH" in sent:
+                raw_score = d.get("avg_score", d.get("score", 70))
+                symbols_with_sentiment.append((sym, sent, abs(int(raw_score))))
+
+        symbols_with_sentiment.sort(key=lambda x: x[2], reverse=True)
+    return symbols_with_sentiment
 
 
-
-
-def calculate_position_sizing(
-    entry_price: float,
-    sl_price: float,
-    account_size: float = 500000,
-    risk_pct: float = 0.01
-) -> dict:
-    """Calculate position size using 1% risk rule."""
-
-    risk_per_share = entry_price - sl_price
-    risk_amount = account_size * risk_pct
-
-    if risk_per_share <= 0:
-        return {"error": "Invalid SL"}
-
-    quantity = int(risk_amount / risk_per_share)
-    capital_needed = quantity * entry_price
-    target_1 = entry_price * 1.08
-    target_2 = entry_price * 1.15
-
-    return {
-        "quantity": quantity,
-        "capital_needed": round(capital_needed, 2),
-        "risk_amount": round(risk_amount, 2),
-        "target_1": round(target_1, 2),
-        "target_2": round(target_2, 2),
-        "potential_profit_t1": round(quantity * (target_1 - entry_price), 2),
-        "potential_profit_t2": round(quantity * (target_2 - entry_price), 2),
-    }
-
-
+# ──────────────────────────────────────────────────────────────
+# 4. PRINT RESULTS WITH 4-LAYER POWERFUL SL
+# ──────────────────────────────────────────────────────────────
 def print_powerful_sl_results(candidates: list[dict], account_size: float = 500000) -> list[dict]:
-    """Print intraday results with powerful SL."""
-
+    """Print intraday results with powerful 4-layer SL and accurate position sizing."""
     results = []
 
-    print("\n" + "="*100)
+    print("\n" + "=" * 100)
     print("⚡ INTRADAY OPTIONS SCANNER — POWERFUL 4-LAYER SL STRATEGY".center(100))
-    print("="*100)
+    print("=" * 100)
     print(f"\n📅 {datetime.now().strftime('%d-%b-%Y %H:%M %p')}")
     print(f"⚠️  Intraday execution window: 9:50 AM - 3:25 PM IST")
-    print(f"✅ Market hours check: {is_market_hours('intraday')}\n")
+    print(f"✅ Market hours check: {is_market_hours()}\n")
 
     for i, c in enumerate(candidates[:5], 1):
-        print(f"\n{'─'*100}")
-        print(f"{i}. {c['symbol']} {c['strike']:.0f} {c['option_type']} | Score: {c['score']}/100")
-        print(f"{'─'*100}")
+        contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {c['option_type']}")
+        spot_str = f"(Spot: ₹{c.get('spot_price', 0):,.2f})" if c.get('spot_price', 0) > 0 else ""
+        print(f"\n{'─' * 100}")
+        print(f"{i}. 🎯 {contract_str} {spot_str} | Score: {c['score']}/100 [{c.get('sentiment_catalyst', 'CATALYST')}]")
+        print(f"{'─' * 100}")
 
-        # Calculate powerful SL
-        sl_result = calculate_powerful_sl(
-            entry_price=c['ltp'],
-            delta=c['delta'],
-            iv=c['iv'],
-            theta=c['theta'],
-            vega=c['vega'],
-        )
-
-        # Print SL breakdown
+        # SL Breakdown
         print(f"\n🛡️ POWERFUL SL (4-Layer Protection):")
         print(f"   Entry Price:           ₹{c['ltp']:.2f}")
-        print(f"   ├─ Layer 1 (Delta):    ₹{sl_result['layer1_buffer']:.2f} buffer")
-        print(f"   ├─ Layer 2 (Vol):      ₹{sl_result['layer2_vol_buffer']:.2f} buffer")
-        print(f"   ├─ Layer 3 (Theta):    ₹{sl_result['layer3_theta_buffer']:.2f} buffer")
-        print(f"   └─ Layer 4 (Vega):     ₹{sl_result['layer4_vega_buffer']:.2f} buffer")
+        print(f"   ├─ Layer 1 (Delta):    ₹{c.get('layer1_buffer', 0):.2f} buffer")
+        print(f"   ├─ Layer 2 (Vol):      ₹{c.get('layer2_vol_buffer', 0):.2f} buffer")
+        print(f"   ├─ Layer 3 (Theta):    ₹{c.get('layer3_theta_buffer', 0):.2f} buffer")
+        print(f"   └─ Layer 4 (Vega):     ₹{c.get('layer4_vega_buffer', 0):.2f} buffer")
         print(f"   ────────────────────────────────────────────")
-        print(f"   💪 POWERFUL SL:        ₹{sl_result['powerful_sl']:.2f}")
-        print(f"   Risk per lot:          ₹{sl_result['sl_risk']:.2f} ({sl_result['sl_risk_pct']:.2f}%)")
+        print(f"   💪 POWERFUL SL:        ₹{c['powerful_sl']:.2f}")
+        print(f"   Risk per share:        ₹{c['sl_risk']:.2f} ({c['sl_risk_pct']:.2f}%)")
 
-        # Comparison with old method
         old_sl = c['ltp'] * 0.80
         old_risk = c['ltp'] - old_sl
-        improvement = ((old_risk - sl_result['sl_risk']) / old_risk * 100)
+        improvement = ((old_risk - c['sl_risk']) / old_risk * 100) if old_risk > 0 else 0
         print(f"   ────────────────────────────────────────────")
         print(f"   Old SL (20%):          ₹{old_sl:.2f} (Risk: ₹{old_risk:.2f})")
         print(f"   📈 Improvement:        {improvement:.1f}% tighter SL! ✅")
 
         # Anti-Whipsaw Features
         print(f"\n🔄 Anti-Whipsaw Features:")
-        print(f"   Trailing SL trigger:   ₹{sl_result['trailing_trigger']:.2f} (+5% profit)")
-        print(f"   New SL if triggered:   ₹{sl_result['trailing_sl_new']:.2f}")
+        print(f"   Trailing SL trigger:   ₹{c['trailing_trigger']:.2f} (+5% profit)")
+        print(f"   New SL if triggered:   ₹{c['trailing_sl_new']:.2f}")
 
-        # Position sizing
-        pos_result = calculate_position_sizing(c['ltp'], sl_result['powerful_sl'], account_size)
+        # Position Sizing (1% risk rule based on whole lots)
+        lots = c.get('recommended_qty', 1)
+        lot_sz = c.get('lot_size', 1)
+        tot_shares = c.get('total_shares', lots * lot_sz)
+        cap = c.get('capital_needed', tot_shares * c['ltp'])
+        m_risk = c.get('max_risk', tot_shares * c['sl_risk'])
+        t1 = c.get('t1', round(c['ltp'] * 1.08, 2))
+        t2 = c.get('t2', round(c['ltp'] * 1.15, 2))
+        p_t1 = c.get('potential_profit_t1', round(tot_shares * (t1 - c['ltp']), 2))
+        p_t2 = c.get('potential_profit_t2', round(tot_shares * (t2 - c['ltp']), 2))
 
-        if "error" not in pos_result:
-            print(f"\n💰 Position Sizing (1% Risk Rule):")
-            print(f"   Quantity:              {pos_result['quantity']} lots")
-            print(f"   Capital Needed:        ₹{pos_result['capital_needed']:,.0f}")
-            print(f"   Max Risk:              ₹{pos_result['risk_amount']:.0f}")
-            print(f"   Target 1:              ₹{pos_result['target_1']:.2f} → +{((pos_result['target_1']/c['ltp']-1)*100):.1f}% → P&L: ₹{pos_result['potential_profit_t1']:+,.0f}")
-            print(f"   Target 2:              ₹{pos_result['target_2']:.2f} → +{((pos_result['target_2']/c['ltp']-1)*100):.1f}% → P&L: ₹{pos_result['potential_profit_t2']:+,.0f}")
+        print(f"\n💰 Position Sizing (1% Risk Rule with Exchange Lots):")
+        print(f"   Lots Recommended:      {lots} lots ({lot_sz} shares/lot = {tot_shares} qty)")
+        print(f"   Capital Needed:        ₹{cap:,.2f}")
+        print(f"   Max Risk:              ₹{m_risk:,.2f} (Within 1% account budget)")
+        print(f"   Target 1 (+8%):        ₹{t1:.2f} → P&L: ₹{p_t1:+,.2f}")
+        print(f"   Target 2 (+15%):       ₹{t2:.2f} → P&L: ₹{p_t2:+,.2f}")
 
-        # Greeks info
-        print(f"\n📊 Greeks:")
-        print(f"   Delta: {c['delta']:.2f} | Theta: {c['theta']:.2f} | Vega: {c['vega']:.2f} | IV: {c['iv']:.0f}%")
-        print(f"   Market Vol: {sl_result['market_volatility'].upper()}")
+        # Greeks
+        print(f"\n📊 Greeks & Volatility:")
+        print(f"   Delta: {c['delta']:.2f} | Theta: {c['theta']:.2f} | Vega: {c['vega']:.2f} | IV: {c['iv']:.1f}%")
+        print(f"   Market Vol: {c.get('market_volatility', 'NORMAL').upper()}")
 
-        results.append({
-            "symbol": c['symbol'],
-            "strike": c['strike'],
-            "type": c['option_type'],
-            "ltp": c['ltp'],
-            "score": c['score'],
-            "powerful_sl": sl_result['powerful_sl'],
-            "sl_risk": sl_result['sl_risk'],
-            "quantity": pos_result.get('quantity', 0),
-            "capital": pos_result.get('capital_needed', 0),
-        })
+        results.append(c)
 
-    print("\n" + "="*100)
+    print("\n" + "=" * 100)
     print("📈 TRADE EXECUTION PLAN".center(100))
-    print("="*100)
+    print("=" * 100)
     print("""
 1. ✅ BUY at LTP (Entry Price)
 2. ✅ SET SL at Powerful SL (NOT old 20% method!)
@@ -401,10 +237,10 @@ def print_powerful_sl_results(candidates: list[dict], account_size: float = 5000
 5. ✅ IF price hits 98-99 and bounces: YOU WIN! (Your SL is protected)
 6. ✅ IF price keeps falling to SL: EXIT with disciplined loss
 
-⚠️ KEY DIFFERENCE FROM OLD METHOD:
-   • Old SL too wide (₹80) → Gets whipsawed often
-   • New SL protected (₹86.75) → Bounces don't hurt you!
-   • Same 1% risk, but MUCH better entry/exit quality
+⚠️ KEY ADVANTAGES:
+   • Real ATM Strike & Live Quote: No arbitrary 1000 strike approximations!
+   • Exchange Lot-Size Aware: Capital & risk scaled to exact exchange lot sizes.
+   • Dynamic 4-Layer SL: Absorbs noise & stops premature stop-outs.
     """)
 
     return results
@@ -413,7 +249,7 @@ def print_powerful_sl_results(candidates: list[dict], account_size: float = 5000
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Intraday Options Scanner with Powerful 4-Layer SL"
+        description="Intraday Options Scanner with Powerful 4-Layer SL & Real Market Resolution"
     )
     parser.add_argument(
         "--use-news-candidates",
@@ -423,7 +259,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--symbols",
         type=str,
-        default="RELIANCE,TCS,MARUTI,INFY,HDFCBANK",
+        default="RELIANCE,TCS,BPCL,VEDL,MARUTI,HDFCBANK",
         help="Comma-separated F&O symbols to scan (ignored if --use-news-candidates is passed)",
     )
     parser.add_argument(
@@ -441,78 +277,70 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def export_scan_config(args, result_count: int, symbols_scanned: list[str]) -> dict:
+    """Export scan configuration for audit trail."""
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "script": "run_options_intraday_scan_powerful_sl",
+        "symbols_scanned": symbols_scanned,
+        "num_symbols": len(symbols_scanned),
+        "min_score": args.min_score,
+        "qualified_candidates": result_count,
+        "sl_strategy": "Powerful 4-Layer (Delta + Vol + Theta + Vega)",
+        "market_hours_check": is_market_hours(),
+    }
 
-def get_latest_news_symbols(log_dir: Path) -> list:
-    """Fetch BOTH Bullish and Bearish symbols dynamically from the morning News."""
-    import json
-    if not log_dir.exists():
-        return []
-    news_files = list(log_dir.glob("news_scan_*.json"))
-    if not news_files:
-        return []
-    latest_file = max(news_files, key=lambda f: f.stat().st_mtime)
-    with open(latest_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    symbols_with_sentiment = []
-    if "data" in data:
-        # We extract BOTH Bullish and Bearish and pass their sentiment as a tuple
-        for sym, d in data["data"].items():
-            sent = d.get("sentiment", "")
-            if "BULLISH" in sent or "BEARISH" in sent:
-                symbols_with_sentiment.append((sym, sent, d.get("avg_score", 0)))
-        
-        # Sort entirely by the absolute intensity score 
-        symbols_with_sentiment.sort(key=lambda x: abs(x[2]), reverse=True)
-        
-        # Only extract the symbol and the raw sentiment string
-        symbols_with_sentiment = [(item[0], item[1]) for item in symbols_with_sentiment]
-    return symbols_with_sentiment
 
 def main():
     """Main execution function."""
-    # IMPROVEMENT 1: Check if today is a trading day
     if not is_trading_day():
         print("\n⚠️  HALT: Today is NOT a trading day (weekend or NSE holiday)")
         print("    Intraday scanner only runs on trading days. Please try again tomorrow.\n")
         return
 
-    # IMPROVEMENT 2: Cleanup old logs at startup
     cleanup_old_logs(Path("logs"), days_to_keep=30)
-
     args = parse_args()
 
+    candidates_input = []
     if getattr(args, 'use_news_candidates', False):
         news_data = get_latest_news_symbols(Path("logs"))
         if news_data:
             bullish = [s[0] for s in news_data if "BULLISH" in s[1]]
             bearish = [s[0] for s in news_data if "BEARISH" in s[1]]
-            
+
             print(f"\n📰 [NEWS INTEGRATION] Dynamic fetch complete from latest morning scan!")
             if bullish:
                 print(f"   🟢 BULLISH (Targeting CE): {', '.join(bullish)}")
             if bearish:
                 print(f"   🔴 BEARISH (Targeting PE): {', '.join(bearish)}")
-            
-            # Pass tuple list directly
-            candidates = generate_sample_intraday_candidates(news_data)
+
+            candidates_input = news_data
             args.symbols = ",".join([s[0] for s in news_data])
         else:
             print("\n⚠️  [NEWS INTEGRATION] No recent news symbols found. Falling back to default.")
-            candidates = generate_sample_intraday_candidates(args.symbols.split(','))
+            candidates_input = [(s.strip(), "BULLISH", 70) for s in args.symbols.split(',') if s.strip()]
     else:
-        candidates = generate_sample_intraday_candidates(args.symbols.split(','))
+        candidates_input = [(s.strip(), "BULLISH", 70) for s in args.symbols.split(',') if s.strip()]
 
-    # Filter by min score
-    filtered = [c for c in candidates if c['score'] >= args.min_score]
+    print("\n🔍 Resolving live market option strikes, quotes & Greeks...")
+    resolved = resolve_all_candidates(
+        candidates_input,
+        is_btst=False,
+        include_nifty=False,
+        account_size=args.account_size,
+        min_score=args.min_score,
+    )
+
+    if not resolved:
+        print("\n⚠️ No qualified option candidates found matching the score criteria.")
+        return
 
     # Print results with powerful SL
-    results = print_powerful_sl_results(filtered, args.account_size)
+    results = print_powerful_sl_results(resolved, args.account_size)
 
     # Save execution log
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-
     log_file = log_dir / f"intraday_scan_powerful_sl_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
     log_data = {
@@ -527,7 +355,7 @@ def main():
         }
     }
 
-    with open(log_file, 'w') as f:
+    with open(log_file, 'w', encoding='utf-8') as f:
         json.dump(log_data, f, indent=2, default=str)
 
     print(f"\n✅ Execution log saved: {log_file}\n")
@@ -537,25 +365,16 @@ def main():
     send_options_telegram_alerts(results, strategy_name="⚡ INTRADAY OPTIONS")
     print("✅ Telegram alerts sent successfully!")
 
-    print("="*100)
+    print("=" * 100)
     print("🎯 READY FOR INTRADAY EXECUTION!".center(100))
-    print("="*100)
+    print("=" * 100)
     print(f"""
 Summary:
   • Candidates found: {len(results)}
   • SL Strategy: Powerful 4-Layer (prevents whipsaw!)
-  • Risk method: 1% of account per trade
+  • Risk method: 1% of account per trade (Lot-aware)
   • Expected execution: 9:50 AM - 3:25 PM IST
-
-Next Steps:
-  1. Open your trading terminal
-  2. Buy the top 2-3 candidates
-  3. Use POWERFUL SL prices (shown above)
-  4. Manage with T1/T2 targets
-  5. Enjoy better P&L! 📈
-
-Remember: This SL protects you from the bounce at 98-99!
-""")
+    """)
 
 
 if __name__ == "__main__":
