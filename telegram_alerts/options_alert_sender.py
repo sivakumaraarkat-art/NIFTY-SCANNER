@@ -31,7 +31,7 @@ def _get_credentials():
         script_dir.parent / ".credentials.json",
         script_dir.parent / ".env",
         Path("/home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/.credentials.json"),
-        Path("/home/ubuntu/NiftyScanner/.credentials.json"),
+        Path("D:/NiftyScanner/STOCK_SWING_V1_updated/.credentials.json"),
     ]
     for cred_path in candidates:
         if not cred_path.exists():
@@ -85,11 +85,38 @@ def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS"):
     title = "🌙 <b>BTST OVERNIGHT SCAN</b>" if is_btst else "⚡ <b>INTRADAY OPTIONS SCAN</b>"
     scan_time = datetime.now().strftime("%I:%M %p")
 
+    INDEX_SYMBOLS = {"NIFTY", "SENSEX", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"}
+    stock_cands = [c for c in candidates if str(c.get("symbol", "")).upper() not in INDEX_SYMBOLS]
+    index_cands = [c for c in candidates if str(c.get("symbol", "")).upper() in INDEX_SYMBOLS]
+
+    # Sort each group by score descending
+    stock_cands.sort(key=lambda x: float(x.get("score", 0)), reverse=True)
+    index_cands.sort(key=lambda x: float(x.get("score", 0)), reverse=True)
+
+    # Balanced selection: Top stock options + Top index options (NIFTY & SENSEX)
+    # Default cap is Top 5 candidates; additional included ONLY if high conviction (score >= 75)
+    selected = stock_cands[:3] + index_cands[:2]
+    all_sorted = sorted(candidates, key=lambda x: float(x.get("score", 0)), reverse=True)
+
+    selected_final = []
+    for c in all_sorted:
+        score = float(c.get("score", 0))
+        if len(selected_final) < 5:
+            if c not in selected_final:
+                selected_final.append(c)
+        elif score >= 75:  # High conviction threshold
+            if c not in selected_final:
+                selected_final.append(c)
+        else:
+            break
+
+    selected = selected_final
+
     # Header message
     header = (
         f"{title}\n"
         f"{DIVIDER}\n"
-        f"🔍 <b>Setups:</b> <code>{len(candidates)} Top Ranked</code>\n"
+        f"🔍 <b>Setups:</b> <code>{len(selected)} Top Ranked ({len(stock_cands)} Stocks, {len(index_cands)} Index)</code>\n"
         f"🛡️ <b>Shield:</b> <code>4-Layer Dyn SL</code>\n"
         f"🕒 <b>Time:</b>   <code>{scan_time} IST</code>\n"
         f"{DIVIDER}\n"
@@ -98,11 +125,18 @@ def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS"):
     _send_tg(header)
     time.sleep(0.3)
 
-    # Send up to top 3 to avoid spam
-    for i, c in enumerate(candidates[:3], 1):
+    # Dispatch individual trade cards
+    for i, c in enumerate(selected, 1):
         opt_type = str(c.get("option_type", c.get("type", "CE"))).upper()
         is_call = opt_type == "CE"
-        header_icon = "🟢" if is_call else "🔴"
+        sym_upper = str(c.get("symbol", "")).upper()
+        is_index_trade = sym_upper in INDEX_SYMBOLS
+
+        if is_index_trade:
+            header_icon = "🏛️ 🟢" if is_call else "🏛️ 🔴"
+        else:
+            header_icon = "🟢" if is_call else "🔴"
+
         action_verb = "BUY"
         symbol_esc = html.escape(str(c.get("symbol", "N/A")))
         contract_symbol = html.escape(str(c.get("option_symbol", f"{symbol_esc} {c.get('strike', 0):.0f} {opt_type}")))
@@ -124,15 +158,24 @@ def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS"):
         t1_pts = abs(t1 - ltp) if ltp and t1 else 0.0
         t2_pts = abs(t2 - ltp) if ltp and t2 else 0.0
 
+        warning_tag = c.get("warning_tag", "")
+        conservative_strike = c.get("conservative_strike", 0.0)
+
         card_lines = [
             f"{header_icon} <b>#{i} {action_verb} {contract_symbol}</b>",
             f"{DIVIDER}",
             f"⭐ <b>Score:</b> <b>{score}/100</b> • ⚡ <b>Delta:</b> <code>{delta}</code> • <b>IV:</b> <code>{iv}%</code>",
+        ]
+        if warning_tag:
+            card_lines.append(f"🛡️ <b>Shield Tag:</b> <code>{warning_tag}</code>")
+        card_lines.extend([
             "",
             "💰 <b>TRADE LEVELS</b>",
-        ]
+        ])
         if spot_price > 0:
             card_lines.append(f"├─ 📊 <b>Spot:</b>    <code>₹{spot_price:,.2f}</code> (ATM {strike:.0f})")
+        if conservative_strike > 0 and conservative_strike != strike:
+            card_lines.append(f"├─ 🛡️ <b>ITM Alt:</b>  <code>{conservative_strike:.0f} {opt_type}</code> (High Delta)")
         card_lines.extend([
             f"├─ 🟢 <b>Entry:</b>   <code>₹{ltp:,.2f}</code>",
             f"├─ 🛑 <b>SL:</b>      <code>₹{sl:,.2f}</code> (<b>-{sl_pts:.2f} pts</b>)",

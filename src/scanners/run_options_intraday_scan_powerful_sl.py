@@ -274,6 +274,11 @@ def parse_args() -> argparse.Namespace:
         default=500000,
         help="Trading account size in ₹ (default: ₹500,000)",
     )
+    parser.add_argument(
+        "--ignore-holiday",
+        action="store_true",
+        help="Bypass trading day check for testing/offline analysis",
+    )
     return parser.parse_args()
 
 
@@ -293,13 +298,13 @@ def export_scan_config(args, result_count: int, symbols_scanned: list[str]) -> d
 
 def main():
     """Main execution function."""
-    if not is_trading_day():
+    cleanup_old_logs(Path("logs"), days_to_keep=30)
+    args = parse_args()
+
+    if not args.ignore_holiday and not is_trading_day():
         print("\n⚠️  HALT: Today is NOT a trading day (weekend or NSE holiday)")
         print("    Intraday scanner only runs on trading days. Please try again tomorrow.\n")
         return
-
-    cleanup_old_logs(Path("logs"), days_to_keep=30)
-    args = parse_args()
 
     candidates_input = []
     if getattr(args, 'use_news_candidates', False):

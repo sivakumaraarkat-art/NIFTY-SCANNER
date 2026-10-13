@@ -37,12 +37,15 @@ INDEX_MAP = {
     "NIFTY BANK": "NSE:NIFTY BANK",
     "FINNIFTY": "NSE:NIFTY FIN SERVICE",
     "MIDCPNIFTY": "NSE:NIFTY MID SELECT",
+    "SENSEX": "BSE:SENSEX",
+    "BSE SENSEX": "BSE:SENSEX",
 }
 
 # Standard fallback lot sizes for major F&O symbols if NFO master is unreachable
 FALLBACK_LOT_SIZES = {
     "NIFTY": 65,
     "BANKNIFTY": 30,
+    "SENSEX": 20,
     "FINNIFTY": 60,
     "MIDCPNIFTY": 120,
     "RELIANCE": 500,
@@ -90,6 +93,10 @@ def get_kite_client() -> Optional[Any]:
     # Candidate file locations for token and api key
     token_candidates = [
         Path("/home/ubuntu/NiftyScanner/.kite_access_token"),
+        Path("/home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/.kite_access_token"),
+        Path("/home/ubuntu/NiftyScanner/nifty_v14_7/.kite_access_token"),
+        Path("/home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD/.kite_access_token"),
+        Path("D:/NiftyScanner/.kite_access_token"),
         Path.home() / ".kite_access_token",
         Path(".kite_access_token"),
         Path("../.kite_access_token"),
@@ -97,6 +104,9 @@ def get_kite_client() -> Optional[Any]:
     ]
     key_candidates = [
         Path("/home/ubuntu/NiftyScanner/.kite_api_key"),
+        Path("/home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/.kite_api_key"),
+        Path("/home/ubuntu/NiftyScanner/nifty_v14_7/.kite_api_key"),
+        Path("D:/NiftyScanner/.kite_api_key"),
         Path.home() / ".kite_api_key",
         Path(".kite_api_key"),
         Path("../.kite_api_key"),
@@ -105,15 +115,16 @@ def get_kite_client() -> Optional[Any]:
 
     token = os.getenv("ZERODHA_ACCESS_TOKEN", "").strip()
     if not token:
-        for p in token_candidates:
-            if p and p.exists():
-                try:
-                    val = p.read_text(encoding="utf-8").strip()
-                    if val:
-                        token = val
-                        break
-                except Exception:
-                    pass
+        existing_tokens = [p for p in token_candidates if p and p.exists()]
+        existing_tokens.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        for p in existing_tokens:
+            try:
+                val = p.read_text(encoding="utf-8").strip()
+                if val:
+                    token = val
+                    break
+            except Exception:
+                pass
 
     api_key = os.getenv("ZERODHA_API_KEY", "").strip()
     if not api_key:
@@ -176,8 +187,14 @@ def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> 
 
     if kite is not None:
         try:
-            print("⏳ Downloading live NFO instrument master from Zerodha Kite...")
+            print("⏳ Downloading live NFO & BFO instrument master from Zerodha Kite...")
             raw_instruments = kite.instruments("NFO")
+            try:
+                bfo_inst = kite.instruments("BFO")
+                if bfo_inst:
+                    raw_instruments.extend(bfo_inst)
+            except Exception:
+                pass
             # Format and cache to disk
             serialized = []
             for item in raw_instruments:
@@ -413,7 +430,7 @@ def resolve_option_candidate(
     # Fallback spot price heuristic if Kite is unavailable
     if spot_price <= 0:
         fallback_spots = {
-            "NIFTY": 22500.0, "BANKNIFTY": 54800.0, "RELIANCE": 1180.0,
+            "NIFTY": 22500.0, "BANKNIFTY": 54800.0, "SENSEX": 81500.0, "RELIANCE": 1180.0,
             "TCS": 2130.0, "HDFCBANK": 715.0, "INFY": 1030.0,
             "BPCL": 305.0, "VEDL": 255.0, "MARUTI": 11400.0, "BAJFINANCE": 990.0,
         }
@@ -446,14 +463,33 @@ def resolve_option_candidate(
                     tradingsymbol = contract["tradingsymbol"]
                     lot_size = contract["lot_size"]
 
-    # 3. Fetch Live Option Quote / LTP
+    # 3. Fetch Live Option Quote / LTP & Depth (Bid-Ask Spread Guard)
     option_ltp = 0.0
+    bid_price = 0.0
+    ask_price = 0.0
+    spread_pct = 0.0
+    open_interest = 0
+
     if kite is not None and tradingsymbol:
         try:
             nfo_key = f"NFO:{tradingsymbol}"
-            q = kite.ltp(nfo_key)
-            if nfo_key in q and q[nfo_key]["last_price"] > 0:
-                option_ltp = float(q[nfo_key]["last_price"])
+            quotes = kite.quote([nfo_key])
+            if nfo_key in quotes:
+                q_info = quotes[nfo_key]
+                if q_info.get("last_price", 0) > 0:
+                    option_ltp = float(q_info["last_price"])
+                open_interest = int(q_info.get("oi", 0))
+
+                depth = q_info.get("depth", {})
+                buy_orders = depth.get("buy", [])
+                sell_orders = depth.get("sell", [])
+                if buy_orders and buy_orders[0].get("price", 0) > 0:
+                    bid_price = float(buy_orders[0]["price"])
+                if sell_orders and sell_orders[0].get("price", 0) > 0:
+                    ask_price = float(sell_orders[0]["price"])
+
+                if bid_price > 0 and ask_price > 0 and option_ltp > 0:
+                    spread_pct = round(((ask_price - bid_price) / option_ltp) * 100.0, 2)
         except Exception:
             pass
 
@@ -491,7 +527,36 @@ def resolve_option_candidate(
         t1 = round(option_ltp * 1.25, 2)  # +25%
         t2 = round(option_ltp * 1.50, 2)  # +50%
 
-    # 7. Accurate Position Sizing (1% Risk Rule with whole Lots)
+    # 7. Conservative ITM Strike Resolution (High Delta / Low Decay Alternative)
+    if is_index:
+        step_sz = 50.0 if symbol in ["NIFTY", "NIFTY 50"] else 100.0
+    else:
+        if spot_price >= 1000.0:
+            step_sz = 20.0
+        elif spot_price >= 500.0:
+            step_sz = 10.0
+        else:
+            step_sz = 5.0
+
+    if opt_type == "CE":
+        conservative_itm_strike = max(0.0, atm_strike - step_sz)
+    else:
+        conservative_itm_strike = atm_strike + step_sz
+
+    # 8. Risk Warning Badges & Filters
+    warning_flags = []
+    if is_btst and not is_index and t_days <= 2:
+        warning_flags.append(f"⚠️ DTE {t_days}d (Overnight Theta Risk)")
+
+    if spread_pct > 5.0:
+        warning_flags.append(f"⚠️ Wide Spread ({spread_pct:.1f}%)")
+        if spread_pct > 8.0:
+            sentiment_score = max(0, sentiment_score - 15)  # Penalize illiquid options
+
+    if iv * 100 > 35.0:
+        warning_flags.append(f"🔥 High IV ({iv*100:.0f}% Vega Risk)")
+
+    # 9. Accurate Position Sizing (1% Risk Rule with whole Lots)
     risk_per_share = sl_data["sl_risk"]
     risk_per_lot = risk_per_share * lot_size
     account_risk_budget = account_size * 0.01  # 1% risk
@@ -501,6 +566,10 @@ def resolve_option_candidate(
     else:
         recommended_lots = 1
 
+    # IV Crush Guard: Scale down position size by 50% if IV > 40%
+    if iv * 100 > 40.0 and recommended_lots > 1:
+        recommended_lots = max(1, recommended_lots // 2)
+
     total_shares = recommended_lots * lot_size
     capital_needed = round(total_shares * option_ltp, 2)
     max_risk_actual = round(total_shares * risk_per_share, 2)
@@ -509,11 +578,17 @@ def resolve_option_candidate(
         "symbol": symbol,
         "option_symbol": tradingsymbol,
         "strike": float(atm_strike),
+        "conservative_strike": float(conservative_itm_strike),
         "option_type": opt_type,
         "type": opt_type,
         "spot_price": round(spot_price, 2),
         "ltp": round(option_ltp, 2),
         "entry_price": round(option_ltp, 2),
+        "bid_price": round(bid_price, 2),
+        "ask_price": round(ask_price, 2),
+        "spread_pct": spread_pct,
+        "open_interest": open_interest,
+        "dte": t_days,
         "lot_size": lot_size,
         "recommended_qty": recommended_lots,
         "total_shares": total_shares,
@@ -538,6 +613,8 @@ def resolve_option_candidate(
         "market_volatility": sl_data["market_volatility"],
         "score": sentiment_score,
         "sentiment_catalyst": sentiment,
+        "warning_flags": warning_flags,
+        "warning_tag": " • ".join(warning_flags) if warning_flags else "",
         "layer1_buffer": sl_data["layer1_buffer"],
         "layer2_vol_buffer": sl_data["layer2_vol_buffer"],
         "layer3_theta_buffer": sl_data["layer3_theta_buffer"],
@@ -567,7 +644,7 @@ def resolve_all_candidates(
 
     # Optional Index candidates for BTST
     if is_btst and include_nifty:
-        for idx in ["NIFTY", "BANKNIFTY"]:
+        for idx in ["NIFTY", "SENSEX"]:
             res = resolve_option_candidate(
                 kite, nfo_instruments, idx, "BULLISH", is_btst=True, account_size=account_size, sentiment_score=85
             )

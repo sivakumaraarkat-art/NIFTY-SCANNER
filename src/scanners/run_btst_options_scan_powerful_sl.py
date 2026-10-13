@@ -142,7 +142,7 @@ def passes_theta_filter(theta: float, ltp: float, max_decay_pct: float = 0.15) -
 
 
 # ──────────────────────────────────────────────────────────────
-# 3. NEWS SYMBOLS PARSER
+# 3. NEWS & LIVE MOVER SYMBOLS PARSER
 # ──────────────────────────────────────────────────────────────
 def get_latest_news_symbols(log_dir: Path) -> list:
     """Fetch BOTH Bullish and Bearish symbols dynamically from News Scanner."""
@@ -171,6 +171,50 @@ def get_latest_news_symbols(log_dir: Path) -> list:
     return symbols_with_sentiment
 
 
+def get_live_market_movers(kite, nfo_instruments, top_n=8) -> list:
+    """Scan live F&O universe for top gainers (CE) and top losers (PE)."""
+    if kite is None:
+        return []
+    try:
+        fo_names = sorted(list(set(
+            i["name"] for i in nfo_instruments
+            if i["segment"] in ["NFO-FUT", "BFO-FUT"] and i["name"] not in ["NIFTY", "BANKNIFTY", "SENSEX", "FINNIFTY", "MIDCPNIFTY"]
+        )))
+        symbols = [f"NSE:{name}" for name in fo_names]
+        quotes = {}
+        for i in range(0, len(symbols), 250):
+            quotes.update(kite.quote(symbols[i:i+250]))
+
+        bullish = []
+        bearish = []
+        for sym, q in quotes.items():
+            ltp = q.get("last_price", 0.0)
+            ohlc = q.get("ohlc", {})
+            prev_close = ohlc.get("close", 0.0)
+            high = ohlc.get("high", 0.0)
+            low = ohlc.get("low", 0.0)
+            if prev_close <= 0 or ltp < 40:
+                continue
+
+            pct = ((ltp - prev_close) / prev_close) * 100
+            day_range = high - low
+            range_pos = ((ltp - low) / day_range) * 100 if day_range > 0 else 50.0
+            name = sym.replace("NSE:", "")
+
+            if pct >= 0.8 and range_pos >= 70:
+                bullish.append((name, "BULLISH 🚀 (BTST Gainer)", int(min(95, 70 + pct * 5))))
+            elif pct <= -0.8 and range_pos <= 30:
+                bearish.append((name, "BEARISH ⚠️ (BTST Breakdown)", int(min(95, 70 + abs(pct) * 5))))
+
+        bullish.sort(key=lambda x: x[2], reverse=True)
+        bearish.sort(key=lambda x: x[2], reverse=True)
+
+        return bullish[:top_n] + bearish[:top_n]
+    except Exception as e:
+        print(f"⚠️ Could not fetch market movers: {e}")
+        return []
+
+
 # ──────────────────────────────────────────────────────────────
 # 4. PRINT BTST RESULTS WITH 4-LAYER SL
 # ──────────────────────────────────────────────────────────────
@@ -179,21 +223,31 @@ def print_btst_results(stock_candidates: list[dict], index_candidates: list[dict
     all_results = []
 
     print("\n" + "=" * 100)
-    print("🌙 BTST OPTIONS SCANNER — POWERFUL 4-LAYER SL STRATEGY".center(100))
+    print("🌙 BTST OPTIONS SCANNER — POWERFUL 4-LAYER SL STRATEGY (CE & PE)".center(100))
     print("=" * 100)
     print(f"\n📅 {datetime.now().strftime('%d-%b-%Y %H:%M %p')}")
     print(f"⚠️  BTST execution window: 3:00 PM - 3:25 PM IST (Next day exit: 9:15 AM)")
     print(f"✅ Market hours check: {is_market_hours()}\n")
 
-    # Section 1: Stock Options
+    # Balanced Stock Options (Top CE + Top PE)
+    ce_stocks = [c for c in stock_candidates if c.get("option_type") == "CE"]
+    pe_stocks = [c for c in stock_candidates if c.get("option_type") == "PE"]
+
+    selected_stocks = ce_stocks[:2] + pe_stocks[:2]
+    if len(selected_stocks) < 4:
+        remaining = [c for c in stock_candidates if c not in selected_stocks]
+        selected_stocks.extend(remaining[:4 - len(selected_stocks)])
+
     print("━" * 100)
-    print(f"📊 TOP STOCK OPTIONS CANDIDATES ({len(stock_candidates)})")
+    print(f"📊 TOP STOCK OPTIONS CANDIDATES ({len(selected_stocks)})")
     print("━" * 100)
 
-    for i, c in enumerate(stock_candidates[:5], 1):
-        contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {c['option_type']}")
+    for i, c in enumerate(selected_stocks, 1):
+        opt_type = c.get('option_type', 'CE')
+        icon = "🟢" if opt_type == "CE" else "🔴"
+        contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {opt_type}")
         spot_str = f"(Spot: ₹{c.get('spot_price', 0):,.2f})" if c.get('spot_price', 0) > 0 else ""
-        print(f"\n{i}. 🎯 {contract_str} {spot_str} | Score: {c['score']}/100 [{c.get('sentiment_catalyst', 'BTST')}]")
+        print(f"\n{i}. {icon} 🎯 {contract_str} {spot_str} | Score: {c['score']}/100 [{c.get('sentiment_catalyst', 'BTST')}]")
         print(f"   Entry: ₹{c['ltp']:.2f} | Powerful SL: ₹{c['powerful_sl']:.2f} (-{c['sl_risk_pct']:.1f}%)")
         print(f"   Targets: T1: ₹{c['t1']:.2f} (+25%) | T2: ₹{c['t2']:.2f} (+50%)")
         print(f"   Sizing: {c.get('recommended_qty', 1)} lots ({c.get('lot_size', 1)}/lot) | Capital: ₹{c.get('capital_needed', 0):,.2f} | Max Risk: ₹{c.get('max_risk', 0):,.2f}")
@@ -206,10 +260,12 @@ def print_btst_results(stock_candidates: list[dict], index_candidates: list[dict
         print(f"📈 TOP INDEX OPTIONS CANDIDATES ({len(index_candidates)})")
         print("━" * 100)
 
-        for i, c in enumerate(index_candidates[:3], 1):
-            contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {c['option_type']}")
+        for i, c in enumerate(index_candidates[:2], 1):
+            opt_type = c.get('option_type', 'CE')
+            icon = "🟢" if opt_type == "CE" else "🔴"
+            contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {opt_type}")
             spot_str = f"(Spot: ₹{c.get('spot_price', 0):,.2f})" if c.get('spot_price', 0) > 0 else ""
-            print(f"\n{i}. 🏛️ {contract_str} {spot_str} | Score: {c['score']}/100")
+            print(f"\n{i}. {icon} 🏛️ {contract_str} {spot_str} | Score: {c['score']}/100")
             print(f"   Entry: ₹{c['ltp']:.2f} | Powerful SL: ₹{c['powerful_sl']:.2f} (-{c['sl_risk_pct']:.1f}%)")
             print(f"   Targets: T1: ₹{c['t1']:.2f} (+25%) | T2: ₹{c['t2']:.2f} (+50%)")
             print(f"   Sizing: {c.get('recommended_qty', 1)} lots ({c.get('lot_size', 1)}/lot) | Capital: ₹{c.get('capital_needed', 0):,.2f} | Max Risk: ₹{c.get('max_risk', 0):,.2f}")
@@ -270,6 +326,11 @@ def parse_args() -> argparse.Namespace:
         default=500000,
         help="Trading account size in ₹ (default: ₹500,000)",
     )
+    parser.add_argument(
+        "--ignore-holiday",
+        action="store_true",
+        help="Bypass trading day check for testing/offline analysis",
+    )
     return parser.parse_args()
 
 
@@ -290,29 +351,43 @@ def export_scan_config(args, result_count: int, symbols_scanned: list[str]) -> d
 
 def main():
     """Main execution function."""
-    if not is_trading_day():
+    cleanup_old_logs(Path("logs"), days_to_keep=30)
+    args = parse_args()
+
+    if not args.ignore_holiday and not is_trading_day():
         print("\n⚠️  HALT: Today is NOT a trading day (weekend or NSE holiday)")
         print("    BTST scanner only runs on trading days. Please try again tomorrow.\n")
         return
 
-    cleanup_old_logs(Path("logs"), days_to_keep=30)
-    args = parse_args()
-
     candidates_input = []
+    kite = get_kite_client()
+    nfo_instruments = get_nfo_instruments(kite)
+
     if getattr(args, 'use_news_candidates', False):
         news_data = get_latest_news_symbols(Path("logs"))
-        if news_data:
-            bullish = [s[0] for s in news_data if "BULLISH" in s[1]]
-            bearish = [s[0] for s in news_data if "BEARISH" in s[1]]
+        movers_data = get_live_market_movers(kite, nfo_instruments, top_n=6)
 
-            print(f"\n📰 [NEWS INTEGRATION] Dynamic fetch complete from latest News Scan!")
+        # Merge news and movers (avoid duplicates by symbol)
+        seen_syms = set()
+        combined = []
+        for item in (news_data + movers_data):
+            sym = item[0]
+            if sym not in seen_syms:
+                seen_syms.add(sym)
+                combined.append(item)
+
+        if combined:
+            bullish = [s[0] for s in combined if "BULLISH" in s[1]]
+            bearish = [s[0] for s in combined if "BEARISH" in s[1]]
+
+            print(f"\n📰 [NEWS + MOVERS INTEGRATION] Dynamic fetch complete from News & Live Market!")
             if bullish:
-                print(f"   🟢 BULLISH (Targeting CE): {', '.join(bullish)}")
+                print(f"   🟢 BULLISH (Targeting CE): {', '.join(bullish[:8])}")
             if bearish:
-                print(f"   🔴 BEARISH (Targeting PE): {', '.join(bearish)}")
+                print(f"   🔴 BEARISH (Targeting PE): {', '.join(bearish[:8])}")
 
-            candidates_input = news_data
-            args.symbols = ",".join([s[0] for s in news_data])
+            candidates_input = combined
+            args.symbols = ",".join(seen_syms)
         else:
             print("\n⚠️  [NEWS INTEGRATION] No recent news symbols found. Falling back to default.")
             candidates_input = [(s.strip(), "BULLISH", 70) for s in args.symbols.split(',') if s.strip()]
@@ -329,13 +404,14 @@ def main():
     )
 
     # Filter candidates by theta decay limit for BTST
+    INDEX_SYMBOLS = ["NIFTY", "SENSEX", "BANKNIFTY"]
     stock_candidates = [
         c for c in resolved
-        if c['symbol'] not in ["NIFTY", "BANKNIFTY"] and passes_theta_filter(c['theta'], c['ltp'])
+        if c['symbol'] not in INDEX_SYMBOLS and passes_theta_filter(c['theta'], c['ltp'])
     ]
     index_candidates = [
         c for c in resolved
-        if c['symbol'] in ["NIFTY", "BANKNIFTY"] and passes_theta_filter(c['theta'], c['ltp'])
+        if c['symbol'] in INDEX_SYMBOLS and passes_theta_filter(c['theta'], c['ltp'])
     ]
 
     if not stock_candidates and not index_candidates:
