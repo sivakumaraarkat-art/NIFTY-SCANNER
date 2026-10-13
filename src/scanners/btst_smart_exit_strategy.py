@@ -221,53 +221,42 @@ class BTSTExitManager:
 # ──────────────────────────────────────────────────────────────
 
 def send_telegram_alert(message: str) -> bool:
-    """Send alert to all configured Telegram channels/chats across all credentials."""
+    """Send alert to the main Stock Swing V1 Telegram bot and chat."""
     try:
         import requests
     except ImportError:
         print(message.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "").replace("<code>", "").replace("</code>", ""))
         return False
 
-    # Collect all (bot_token, chat_id) pairs from BTST-relevant credential files only.
-    # NOTE: nifty_v14_7 credentials are intentionally excluded — that folder's bot
-    #       (@Nifty_stage10_paper_bot) is the v14.9 Paper Trading group and is reserved
-    #       exclusively for Hero-Zero expiry alerts. Including it here caused BTST exit
-    #       alerts to leak into the paper trading group unintentionally.
-    cred_files = [
-        find_file(".credentials.json"),
-        Path("D:/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD/.credentials.json"),
-        Path("/home/ubuntu/NiftyScanner/.credentials.json"),
-        Path("/home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD/.credentials.json"),
-    ]
+    # Force direct load from environment or project .credentials.json (Stock Swing V1 bot only)
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
     targets = []
-    for cf in cred_files:
-        if cf and cf.exists():
-            try:
-                with open(cf, "r", encoding="utf-8") as f:
-                    cdata = json.load(f)
-                tg = cdata.get("telegram", {})
-                b_tok = tg.get("bot_token")
-                c_id = tg.get("chat_id")
-                if b_tok and c_id:
-                    targets.append((b_tok, str(c_id)))
-                if tg.get("recipients") and isinstance(tg.get("recipients"), list):
-                    for r in tg.get("recipients"):
-                        if isinstance(r, dict) and r.get("bot_token") and r.get("chat_id"):
-                            targets.append((r.get("bot_token"), str(r.get("chat_id"))))
-            except Exception:
-                pass
+    if bot_token and chat_id:
+        targets.append((bot_token, str(chat_id)))
 
-    # Deduplicate targets
-    unique_targets = list(dict.fromkeys(targets))
+    # Also check project specific credentials.json if env vars not fully loaded
+    cred_file = find_file(".credentials.json")
+    if cred_file and cred_file.exists():
+        try:
+            with open(cred_file, "r", encoding="utf-8") as f:
+                cdata = json.load(f)
+            tg = cdata.get("telegram", {})
+            b_tok = tg.get("bot_token")
+            c_id = tg.get("chat_id")
+            if b_tok and c_id and (b_tok, str(c_id)) not in targets:
+                targets.append((b_tok, str(c_id)))
+        except Exception:
+            pass
 
-    if not unique_targets:
+    if not targets:
         print("⚠️ No Telegram targets found. Outputting to console:")
         print(message.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "").replace("<code>", "").replace("</code>", ""))
         return False
 
     success = False
-    for b_tok, cid in unique_targets:
+    for b_tok, cid in targets:
         try:
             url = f"https://api.telegram.org/bot{b_tok}/sendMessage"
             payload = {
@@ -426,7 +415,8 @@ def run_automated_exit_monitor(dry_run: bool = False):
                     data = json.load(f)
 
                 stock_list = data.get("stocks", []) or data.get("results", {}).get("stocks", []) or data.get("candidates", [])
-                candidates = stock_list[:3]
+                # Show all candidates from yesterday's scan log so matching is complete
+                candidates = stock_list
 
                 if candidates:
                     msg += "📋 <b>YESTERDAY'S BTST SCAN CANDIDATES:</b>\n\n"
