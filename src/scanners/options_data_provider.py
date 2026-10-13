@@ -7,7 +7,7 @@ Live Market Data & Real Option Strike Resolution Provider for:
 
 Capabilities:
   • Connects to Zerodha Kite API safely using local/shared token credentials.
-  • Resolves real ATM / liquid strikes from the live NFO instrument master.
+  • Resolves real ATM / liquid strikes from the live NFO, BFO & MCX instrument master.
   • Fetches live underlying Spot price & Option LTP in real time.
   • Calculates analytical Black-Scholes Greeks (Delta, Theta, Vega, IV).
   • Applies 4-Layer Powerful Stop Loss & Target calculations.
@@ -41,7 +41,7 @@ INDEX_MAP = {
     "BSE SENSEX": "BSE:SENSEX",
 }
 
-# Standard fallback lot sizes for major F&O symbols if NFO master is unreachable
+# Standard fallback lot sizes for major F&O and Commodity symbols if Master is unreachable
 FALLBACK_LOT_SIZES = {
     "NIFTY": 65,
     "BANKNIFTY": 30,
@@ -79,6 +79,7 @@ FALLBACK_LOT_SIZES = {
     "TECHM": 300,
     "ADANIENT": 300,
     "ADANIPORTS": 400,
+    "CRUDEOIL": 100,
 }
 
 # ──────────────────────────────────────────────────────────────
@@ -90,7 +91,6 @@ def get_kite_client() -> Optional[Any]:
     if KiteConnect is None:
         return None
 
-    # Candidate file locations for token and api key
     token_candidates = [
         Path("/home/ubuntu/NiftyScanner/.kite_access_token"),
         Path("/home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/.kite_access_token"),
@@ -144,7 +144,6 @@ def get_kite_client() -> Optional[Any]:
     try:
         kite = KiteConnect(api_key=api_key)
         kite.set_access_token(token)
-        # Quick verification call
         kite.profile()
         return kite
     except Exception as e:
@@ -153,14 +152,14 @@ def get_kite_client() -> Optional[Any]:
 
 
 # ──────────────────────────────────────────────────────────────
-# 2. NFO INSTRUMENT MASTER CACHE
+# 2. INSTRUMENT MASTER CACHE (NFO, BFO & MCX)
 # ──────────────────────────────────────────────────────────────
 
 _NFO_CACHE = None
 _NFO_CACHE_DATE = None
 
 def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> List[dict]:
-    """Retrieve NFO instruments, caching daily in memory and on disk."""
+    """Retrieve NFO, BFO and MCX instruments, caching daily in memory and on disk."""
     global _NFO_CACHE, _NFO_CACHE_DATE
     today = datetime.date.today()
 
@@ -170,12 +169,10 @@ def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> 
     cache_dir.mkdir(exist_ok=True, parents=True)
     cache_file = cache_dir / f"nfo_instruments_{today.strftime('%Y%m%d')}.json"
 
-    # Try loading from local disk cache
     if cache_file.exists():
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                # Parse date strings back to datetime.date
                 for item in data:
                     if "expiry" in item and item["expiry"]:
                         item["expiry"] = datetime.datetime.strptime(item["expiry"], "%Y-%m-%d").date()
@@ -187,15 +184,16 @@ def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> 
 
     if kite is not None:
         try:
-            print("⏳ Downloading live NFO & BFO instrument master from Zerodha Kite...")
+            print("⏳ Downloading live NFO, BFO & MCX instrument master from Zerodha Kite...")
             raw_instruments = kite.instruments("NFO")
-            try:
-                bfo_inst = kite.instruments("BFO")
-                if bfo_inst:
-                    raw_instruments.extend(bfo_inst)
-            except Exception:
-                pass
-            # Format and cache to disk
+            for exch in ["BFO", "MCX"]:
+                try:
+                    ex_inst = kite.instruments(exch)
+                    if ex_inst:
+                        raw_instruments.extend(ex_inst)
+                except Exception:
+                    pass
+
             serialized = []
             for item in raw_instruments:
                 exp_date = item.get("expiry")
@@ -215,16 +213,18 @@ def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> 
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(serialized, f)
 
-            # Keep in memory with datetime.date objects
             for item in serialized:
                 if item["expiry"]:
-                    item["expiry"] = datetime.datetime.strptime(item["expiry"], "%Y-%m-%d").date()
+                    try:
+                        item["expiry"] = datetime.datetime.strptime(item["expiry"], "%Y-%m-%d").date()
+                    except Exception:
+                        item["expiry"] = today
             _NFO_CACHE = serialized
             _NFO_CACHE_DATE = today
-            print(f"✅ Loaded {len(_NFO_CACHE):,} NFO contracts.")
+            print(f"✅ Loaded {len(_NFO_CACHE):,} total derivative contracts (NFO+BFO+MCX).")
             return _NFO_CACHE
         except Exception as e:
-            print(f"⚠️ [KiteConnect] Could not fetch NFO instruments: {e}")
+            print(f"⚠️ [KiteConnect] Could not fetch instrument masters: {e}")
 
     return []
 
@@ -234,17 +234,14 @@ def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> 
 # ──────────────────────────────────────────────────────────────
 
 def norm_cdf(x: float) -> float:
-    """Standard normal cumulative distribution function."""
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
 def norm_pdf(x: float) -> float:
-    """Standard normal probability density function."""
     return (1.0 / math.sqrt(2.0 * math.pi)) * math.exp(-0.5 * x * x)
 
 
 def bs_price(spot: float, strike: float, t_years: float, r: float, sigma: float, opt_type: str = "CE") -> float:
-    """Calculate Black-Scholes theoretical price."""
     if t_years <= 0 or sigma <= 0 or spot <= 0 or strike <= 0:
         return max(0.0, spot - strike) if opt_type.upper() == "CE" else max(0.0, strike - spot)
     d1 = (math.log(spot / strike) + (r + 0.5 * sigma ** 2) * t_years) / (sigma * math.sqrt(t_years))
@@ -264,7 +261,6 @@ def implied_volatility(
     opt_type: str = "CE",
     default_iv: float = 0.25
 ) -> float:
-    """Invert Black-Scholes using Newton-Raphson to find accurate market IV."""
     t_years = max(t_days / 365.0, 1.0 / 365.0)
     intrinsic = max(0.0, spot - strike) if opt_type.upper() == "CE" else max(0.0, strike - spot)
     if price <= intrinsic or price <= 0.05:
@@ -294,7 +290,6 @@ def calculate_greeks(
     iv_pct: float,
     opt_type: str = "CE"
 ) -> Tuple[float, float, float]:
-    """Calculate Delta, Theta (daily decay), and Vega (per 1% IV)."""
     T = max(t_days / 365.0, 1.0 / 365.0)
     sigma = max(iv_pct, 0.05)
     d1 = (math.log(spot / strike) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
@@ -308,7 +303,7 @@ def calculate_greeks(
         delta = norm_cdf(d1) - 1.0
         theta = (- (spot * pdf_d1 * sigma) / (2 * math.sqrt(T)) + r * strike * math.exp(-r * T) * norm_cdf(-d2)) / 365.0
 
-    vega = (spot * pdf_d1 * math.sqrt(T)) / 100.0  # Vega per 1% change in vol
+    vega = (spot * pdf_d1 * math.sqrt(T)) / 100.0
     return round(delta, 2), round(theta, 2), round(vega, 2)
 
 
@@ -325,15 +320,10 @@ def calculate_powerful_sl_engine(
     is_btst: bool = False,
     days_held: float = 1.0
 ) -> Dict[str, Any]:
-    """
-    Calculate 4-layer protective SL to prevent whipsaw.
-    Supports both Intraday (tight base) and BTST (overnight theta protection).
-    """
     iv_pct = iv / 100 if iv > 1 else iv
     theta_abs = abs(theta)
     vega_abs = abs(vega)
 
-    # Volatility classification
     if iv_pct > 0.30:
         market_vol = "extreme"
     elif iv_pct > 0.20:
@@ -342,12 +332,10 @@ def calculate_powerful_sl_engine(
         market_vol = "normal"
 
     if not is_btst:
-        # Intraday Multipliers
         delta_mult = 0.18 if market_vol == "normal" else (0.20 if market_vol == "volatile" else 0.22)
         theta_mult = 1.5 if market_vol == "normal" else (2.0 if market_vol == "volatile" else 2.5)
         vega_mult = 5.0 if market_vol != "extreme" else 7.5
 
-        # Layers
         layer1_buffer = entry_price * (abs(delta) * delta_mult)
         layer2_vol_buffer = ((iv_pct / 0.20) * entry_price * 0.05) if iv_pct > 0.20 else 0.0
         layer3_theta_buffer = theta_abs * days_held * theta_mult
@@ -355,28 +343,22 @@ def calculate_powerful_sl_engine(
 
         total_buffer = layer1_buffer + layer2_vol_buffer + layer3_theta_buffer + layer4_vega_buffer
         powerful_sl = entry_price - total_buffer
-
-        # Hard guard: minimum 80% of entry (max 20% risk)
         powerful_sl = max(powerful_sl, entry_price * 0.80)
 
         trailing_trigger = entry_price * 1.05
         trailing_sl_new = powerful_sl + (entry_price * 1.05 - entry_price) * 0.5
-
     else:
-        # BTST Multipliers (Theta-focused overnight defense)
         layer1_buffer = entry_price * (abs(delta) * 0.15)
         layer2_vol_buffer = ((iv_pct / 0.20) * entry_price * 0.08) if iv_pct > 0.20 else 0.0
-        layer3_theta_buffer = theta_abs * 1.0 * 2.5  # Heavy overnight decay protection
+        layer3_theta_buffer = theta_abs * 1.0 * 2.5
         layer4_vega_buffer = vega_abs * 7.5
 
         total_buffer = layer1_buffer + layer2_vol_buffer + layer3_theta_buffer + layer4_vega_buffer
         powerful_sl = entry_price - total_buffer
-
-        # BTST guard: minimum 75% of entry (max 25% risk for overnight swing)
         powerful_sl = max(powerful_sl, entry_price * 0.75)
 
         trailing_trigger = entry_price * 1.10
-        trailing_sl_new = entry_price  # Move directly to breakeven on +10% gap
+        trailing_sl_new = entry_price
 
     return {
         "entry_price": round(entry_price, 2),
@@ -395,7 +377,7 @@ def calculate_powerful_sl_engine(
 
 
 # ──────────────────────────────────────────────────────────────
-# 5. REAL OPTION CANDIDATE RESOLVER
+# 5. REAL OPTION CANDIDATE RESOLVER (Supports NSE, BSE & MCX)
 # ──────────────────────────────────────────────────────────────
 
 def resolve_option_candidate(
@@ -407,47 +389,49 @@ def resolve_option_candidate(
     account_size: float = 500000.0,
     sentiment_score: int = 70,
 ) -> Optional[Dict[str, Any]]:
-    """
-    Resolve real option contract (ATM strike, expiry, LTP, Greeks, SL, position sizing).
-    """
     opt_type = "PE" if "BEARISH" in sentiment.upper() else "CE"
     symbol = symbol.strip().upper()
     is_index = symbol in INDEX_MAP
-    nse_key = INDEX_MAP.get(symbol, f"NSE:{symbol}")
+    is_crude = "CRUDE" in symbol
+
+    # Resolve spot / underlying price key
+    if is_crude:
+        spot_key = "MCX:CRUDEOIL26OCTFUT"
+    elif is_index:
+        spot_key = INDEX_MAP.get(symbol, f"NSE:{symbol}")
+    else:
+        spot_key = f"NSE:{symbol}"
 
     spot_price = 0.0
-    quote_data = {}
-
-    # 1. Fetch live Underlying Spot price
     if kite is not None:
         try:
-            q = kite.ltp(nse_key)
-            if nse_key in q and q[nse_key]["last_price"] > 0:
-                spot_price = float(q[nse_key]["last_price"])
+            q = kite.ltp(spot_key)
+            if spot_key in q and q[spot_key]["last_price"] > 0:
+                spot_price = float(q[spot_key]["last_price"])
         except Exception as e:
             print(f"⚠️ Could not fetch spot price for {symbol}: {e}")
 
-    # Fallback spot price heuristic if Kite is unavailable
     if spot_price <= 0:
         fallback_spots = {
             "NIFTY": 22500.0, "BANKNIFTY": 54800.0, "SENSEX": 81500.0, "RELIANCE": 1180.0,
             "TCS": 2130.0, "HDFCBANK": 715.0, "INFY": 1030.0,
             "BPCL": 305.0, "VEDL": 255.0, "MARUTI": 11400.0, "BAJFINANCE": 990.0,
+            "CRUDEOIL": 8750.0,
         }
         spot_price = fallback_spots.get(symbol, 1000.0)
 
     today = datetime.date.today()
     contract = None
     tradingsymbol = ""
-    lot_size = FALLBACK_LOT_SIZES.get(symbol, 500)
+    lot_size = FALLBACK_LOT_SIZES.get(symbol, 100 if is_crude else 500)
     atm_strike = spot_price
     t_days = 20
 
-    # 2. Match exact option contract from NFO Master
+    # Match exact option contract from Master (NFO/BFO/MCX)
     if nfo_instruments:
         sym_opts = [
             i for i in nfo_instruments
-            if i["name"] == symbol and i["instrument_type"] == opt_type and i["expiry"] >= today
+            if symbol in i.get("name", "").upper() and i.get("instrument_type") == opt_type and i.get("expiry") and i["expiry"] >= today
         ]
         if sym_opts:
             expiries = sorted(list(set(i["expiry"] for i in sym_opts)))
@@ -456,14 +440,12 @@ def resolve_option_candidate(
             exp_opts = [i for i in sym_opts if i["expiry"] == nearest_exp]
             strikes = sorted(list(set(i["strike"] for i in exp_opts)))
             if strikes:
-                # Find closest strike to spot (ATM)
                 atm_strike = min(strikes, key=lambda s: abs(s - spot_price))
                 contract = next((i for i in exp_opts if i["strike"] == atm_strike), None)
                 if contract:
                     tradingsymbol = contract["tradingsymbol"]
                     lot_size = contract["lot_size"]
 
-    # 3. Fetch Live Option Quote / LTP & Depth (Bid-Ask Spread Guard)
     option_ltp = 0.0
     bid_price = 0.0
     ask_price = 0.0
@@ -472,10 +454,11 @@ def resolve_option_candidate(
 
     if kite is not None and tradingsymbol:
         try:
-            nfo_key = f"NFO:{tradingsymbol}"
-            quotes = kite.quote([nfo_key])
-            if nfo_key in quotes:
-                q_info = quotes[nfo_key]
+            exch_prefix = "MCX" if is_crude else "NFO"
+            exch_key = f"{exch_prefix}:{tradingsymbol}"
+            quotes = kite.quote([exch_key])
+            if exch_key in quotes:
+                q_info = quotes[exch_key]
                 if q_info.get("last_price", 0) > 0:
                     option_ltp = float(q_info["last_price"])
                 open_interest = int(q_info.get("oi", 0))
@@ -493,22 +476,27 @@ def resolve_option_candidate(
         except Exception:
             pass
 
-    # Fallback option pricing via Black-Scholes if offline / untraded
+    # SAFETY: Never invent an option contract or use a
+    # theoretical price as a live trading entry.
+    if not tradingsymbol:
+        print(
+            f"❌ SKIPPED: No verified MCX {symbol} "
+            f"{opt_type} contract found in Zerodha instruments."
+        )
+        return None
+    if kite is None:
+        print("❌ SKIPPED: Zerodha Kite is not authenticated.")
+        return None
     if option_ltp <= 0.05:
-        # Default ~22-26% IV estimate
-        est_iv = 0.26 if opt_type == "PE" else 0.22
-        t_years = max(t_days / 365.0, 1.0 / 365.0)
-        option_ltp = bs_price(spot_price, atm_strike, t_years, 0.07, est_iv, opt_type)
-        option_ltp = max(round(option_ltp, 2), 1.0)
-        if not tradingsymbol:
-            exp_code = today.strftime("%y%b").upper()
-            tradingsymbol = f"{symbol}{exp_code}{int(atm_strike)}{opt_type}"
+        print(
+            f"❌ SKIPPED: No valid live quote for "
+            f"MCX:{tradingsymbol}. No signal sent."
+        )
+        return None
 
-    # 4. Calculate accurate Greeks & IV
     iv = implied_volatility(option_ltp, spot_price, atm_strike, t_days, r=0.07, opt_type=opt_type)
     delta, theta, vega = calculate_greeks(spot_price, atm_strike, t_days, r=0.07, iv_pct=iv, opt_type=opt_type)
 
-    # 5. Calculate Powerful 4-Layer SL
     sl_data = calculate_powerful_sl_engine(
         entry_price=option_ltp,
         delta=delta,
@@ -519,17 +507,17 @@ def resolve_option_candidate(
         days_held=1.0 if not is_btst else 1.5,
     )
 
-    # 6. Targets
     if not is_btst:
-        t1 = round(option_ltp * 1.08, 2)  # +8%
-        t2 = round(option_ltp * 1.15, 2)  # +15%
+        t1 = round(option_ltp * 1.08, 2)
+        t2 = round(option_ltp * 1.15, 2)
     else:
-        t1 = round(option_ltp * 1.25, 2)  # +25%
-        t2 = round(option_ltp * 1.50, 2)  # +50%
+        t1 = round(option_ltp * 1.25, 2)
+        t2 = round(option_ltp * 1.50, 2)
 
-    # 7. Conservative ITM Strike Resolution (High Delta / Low Decay Alternative)
     if is_index:
         step_sz = 50.0 if symbol in ["NIFTY", "NIFTY 50"] else 100.0
+    elif is_crude:
+        step_sz = 50.0
     else:
         if spot_price >= 1000.0:
             step_sz = 20.0
@@ -543,7 +531,6 @@ def resolve_option_candidate(
     else:
         conservative_itm_strike = atm_strike + step_sz
 
-    # 8. Risk Warning Badges & Filters
     warning_flags = []
     if is_btst and not is_index and t_days <= 2:
         warning_flags.append(f"⚠️ DTE {t_days}d (Overnight Theta Risk)")
@@ -551,22 +538,20 @@ def resolve_option_candidate(
     if spread_pct > 5.0:
         warning_flags.append(f"⚠️ Wide Spread ({spread_pct:.1f}%)")
         if spread_pct > 8.0:
-            sentiment_score = max(0, sentiment_score - 15)  # Penalize illiquid options
+            sentiment_score = max(0, sentiment_score - 15)
 
     if iv * 100 > 35.0:
         warning_flags.append(f"🔥 High IV ({iv*100:.0f}% Vega Risk)")
 
-    # 9. Accurate Position Sizing (1% Risk Rule with whole Lots)
     risk_per_share = sl_data["sl_risk"]
     risk_per_lot = risk_per_share * lot_size
-    account_risk_budget = account_size * 0.01  # 1% risk
+    account_risk_budget = account_size * 0.01
 
     if risk_per_lot > 0:
         recommended_lots = max(1, int(account_risk_budget / risk_per_lot))
     else:
         recommended_lots = 1
 
-    # IV Crush Guard: Scale down position size by 50% if IV > 40%
     if iv * 100 > 40.0 and recommended_lots > 1:
         recommended_lots = max(1, recommended_lots // 2)
 
@@ -633,16 +618,11 @@ def resolve_all_candidates(
     account_size: float = 500000.0,
     min_score: int = 50,
 ) -> List[Dict[str, Any]]:
-    """
-    Resolve a list of candidate symbols into live option candidate objects.
-    candidates_list can be strings ("RELIANCE") or tuples ("RELIANCE", "BULLISH")
-    """
     kite = get_kite_client()
     nfo_instruments = get_nfo_instruments(kite)
 
     results = []
 
-    # Optional Index candidates for BTST
     if is_btst and include_nifty:
         for idx in ["NIFTY", "SENSEX"]:
             res = resolve_option_candidate(
