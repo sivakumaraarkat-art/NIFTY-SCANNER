@@ -8,7 +8,7 @@ import html
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -68,13 +68,14 @@ def _send_tg(text: str) -> bool:
     try:
         r = requests.post(url, json=payload, timeout=12)
         r.raise_for_status()
-        return True
+        return r.json().get("ok") is True
     except Exception as e:
-        print(f"[TELEGRAM] Error delivering alert: {e}")
+        print(f"[TELEGRAM] Delivery failed or unknown ({type(e).__name__}); check Telegram before retrying.")
         return False
 
 
-def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS"):
+def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS", *,
+                                 exact_selection=False, batch_id=None, on_delivery=None):
     """
     Sends clean, mobile-optimized HTML formatted Telegram alerts for Options Scanners.
     """
@@ -83,7 +84,7 @@ def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS"):
 
     is_btst = "BTST" in strategy_name.upper()
     title = "🌙 <b>BTST OVERNIGHT SCAN</b>" if is_btst else "⚡ <b>INTRADAY OPTIONS SCAN</b>"
-    scan_time = datetime.now().strftime("%I:%M %p")
+    scan_time = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%I:%M %p")
 
     INDEX_SYMBOLS = {"NIFTY", "SENSEX", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"}
     stock_cands = [c for c in candidates if str(c.get("symbol", "")).upper() not in INDEX_SYMBOLS]
@@ -110,7 +111,10 @@ def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS"):
         else:
             break
 
-    selected = selected_final
+    # The BTST scanner owns selection. Other callers retain their existing policy.
+    selected = list(candidates) if exact_selection else selected_final
+    if exact_selection and len(selected) > 5:
+        raise ValueError("BTST exact selection exceeds five contracts")
 
     # Header message
     header = (
@@ -122,7 +126,10 @@ def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS"):
         f"{DIVIDER}\n"
         "<i>Top algorithmic setups by momentum & liquidity:</i>"
     )
-    _send_tg(header)
+    if batch_id:
+        header += f"\n<b>Batch:</b> <code>{html.escape(batch_id)}</code>"
+    header_sent = _send_tg(header)
+    cards_sent = []
     time.sleep(0.3)
 
     # Dispatch individual trade cards
@@ -201,8 +208,12 @@ def send_options_telegram_alerts(candidates, strategy_name="INTRADAY OPTIONS"):
                 "⚡ <b>INTRADAY PLAN:</b> <i>Book 50% @ T1 & trail SL to breakeven for T2.</i>",
             ])
 
-        _send_tg("\n".join(card_lines))
+        delivered = _send_tg("\n".join(card_lines))
+        cards_sent.append(delivered)
+        if on_delivery is not None:
+            on_delivery(c, delivered)
         time.sleep(0.3)
+    return {"header_sent": header_sent, "cards_sent": cards_sent}
 
 
 def send_btst_exit_telegram_alert(exit_recommendation: dict):

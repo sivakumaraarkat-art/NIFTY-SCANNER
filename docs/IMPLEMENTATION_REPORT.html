@@ -449,6 +449,7 @@
             <button class="nav-btn" onclick="switchTab('news')">News Scanner</button>
             <button class="nav-btn" onclick="switchTab('intraday')">Intraday Scanner</button>
             <button class="nav-btn" onclick="switchTab('btst')">BTST Scanner</button>
+            <button class="nav-btn" onclick="switchTab('hero-zero')">🔥 Hero-Zero Expiry</button>
             <button class="nav-btn" onclick="switchTab('tests')">Tests</button>
             <button class="nav-btn" onclick="switchTab('deployment')">Deployment</button>
                     <button class="nav-btn" onclick="switchTab('file-map')">🗂️ Project Files & Map</button>
@@ -1750,7 +1751,65 @@ def passes_theta_filter(contract: dict) -> bool:
                     <h3>Improvement 5: Execution Logging</h3>
                     <div class="improvement-card">
                         <p><strong>Benefit:</strong> JSON audit trail for BTST scans</p>
-                        <p><strong>File:</strong> logs/btst_scan_YYYYMMDD_HHMMSS.json</p>
+                        <p><strong>File:</strong> logs/btst_options_scan_powerful_sl_YYYYMMDD_HHMMSS.json</p>
+                    </div>
+                </div>
+
+                <div class="scanner-section">
+                    <h3>🎯 Case Study: TCS BTST Options Selection & 4-Pillar Rationale</h3>
+                    <div class="improvement-card" style="border-left-color: #10b981; background: #f0fdf4;">
+                        <h4 style="color: #15803d; margin-bottom: 10px;">Institutional Multi-Factor Analysis (05-Oct-2026)</h4>
+                        <table class="test-table" style="background: white; margin-top: 10px;">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Value</th>
+                                    <th>Strategic Explanation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Underlying Spot</strong></td>
+                                    <td><strong>₹2,110.90</strong> (+0.6% Rally)</td>
+                                    <td>Surged into 3:00–3:25 PM close, demonstrating high-close accumulation.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Option Contract</strong></td>
+                                    <td><strong>TCS26OCT2120CE</strong></td>
+                                    <td>Dynamically resolved At-The-Money (ATM) contract on 26-Oct expiry.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Option LTP (Entry)</strong></td>
+                                    <td><strong>₹63.00</strong></td>
+                                    <td>Live market price fetched via Zerodha Kite Connect.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>4-Layer Powerful SL</strong></td>
+                                    <td><strong>₹47.25</strong> (-25.0%)</td>
+                                    <td>Absorbs Delta (₹4.82), Vol (₹7.69), Theta (₹4.07), and Vega (₹15.52) buffers.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Target 1 / Target 2</strong></td>
+                                    <td><strong>₹78.75 (+25%) / ₹94.50 (+50%)</strong></td>
+                                    <td>Next morning gap-up targets. Book 50% @ T1, trail 50% for T2.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Exchange Lot Sizing</strong></td>
+                                    <td><strong>1 Lot (225 shares)</strong></td>
+                                    <td>Exact NSE lot size. Capital: ₹14,175.00 | Max Risk: ₹3,543.75 (Within 1% rule).</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Theta Decay Rate</strong></td>
+                                    <td><strong>-₹1.63 / day (2.58% decay)</strong></td>
+                                    <td>Well below strict 15% threshold; safe for overnight holding.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>News Catalyst Score</strong></td>
+                                    <td><strong>86.1 / 100 (BULLISH ⬆️)</strong></td>
+                                    <td>Earnings beat & margin expansion verified across 11+ media feeds.</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -1758,10 +1817,83 @@ def passes_theta_filter(contract: dict) -> bool:
                     <h3>BTST Strategy Guidelines</h3>
                     <div class="improvement-card">
                         <p><strong>Delta Target Range:</strong> 0.45 - 0.70 (slightly ITM for probability)</p>
-                        <p><strong>Theta Constraint:</strong> Max 5% overnight decay</p>
+                        <p><strong>Theta Constraint:</strong> Max 15% overnight decay limit</p>
                         <p><strong>Execution:</strong> Last 55 minutes of market (2:30 PM - 3:25 PM)</p>
                         <p><strong>Position Management:</strong> Set stop losses before close</p>
-                        <p><strong>Next Day:</strong> Exit at market open or predefined levels</p>
+                        <p><strong>Next Day:</strong> Exit at market open via BTST Smart Exit Guide</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HERO-ZERO EXPIRY TAB -->
+            <div id="hero-zero" class="tab-content">
+                <h2>🔥 Dedicated NIFTY & BSE SENSEX Expiry Hero-Zero Scanners</h2>
+                <p>Asymmetric Risk/Reward Expiry Engine delivering to <strong>@Nifty_stage10_paper_bot</strong> and the <strong>Nifty v14.9 Paper Trading</strong> Telegram Group Chat.</p>
+
+                <div class="metrics-grid" style="margin-top: 20px;">
+                    <div class="metric-box">
+                        <div class="value">2x - 5x+</div>
+                        <div class="label">Asymmetric Payoff Targets</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="value">50% Cap</div>
+                        <div class="label">Strict Risk Stop Loss</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="value">02:00 PM+</div>
+                        <div class="label">Multi-Window Gamma Slots</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="value">Single Best</div>
+                        <div class="label">Directional Alpha (CE or PE)</div>
+                    </div>
+                </div>
+
+                <div class="test-card" style="margin-top: 25px; background: #fff7ed; border-left: 4px solid #f97316; padding: 20px;">
+                    <h3 style="color: #c2410c; font-size: 1.2em;">🎯 Expiry Day Execution & Delivery Architecture</h3>
+                    <ul class="feature-list" style="margin-top: 15px; color: #9a3412; line-height: 1.8;">
+                        <li><strong>Single Best Candidate Mode (Default):</strong> Evaluates both CE and PE across technical quality scores, spot trend alignment (+5 bonus for directional fit), and live exchange volume/OI depth. Returns strictly the <strong>single highest-conviction setup</strong>, saving 50% capital and eliminating the drag of a guaranteed losing strangle leg. (Use <code>--both</code> for optional strangle mode).</li>
+                        <li><strong>Multi-Window Time Scheduling (2:00 PM onwards):</strong>
+                            <br>• <code>14:00 – 14:29 IST</code>: 02:00 PM Early Afternoon Gamma Setup (₹12 – ₹65 sweet spot, target ~₹28)
+                            <br>• <code>14:30 – 14:59 IST</code>: 02:30 PM Mid Afternoon Acceleration (₹12 – ₹60 sweet spot)
+                            <br>• <code>15:00 – 15:09 IST</code>: 03:00 PM Peak Volatility Window (₹10 – ₹50 sweet spot)
+                            <br>• <code>15:10 – 15:25 IST</code>: 03:10 PM Peak Gamma Expiry Surge (₹10 – ₹45 sweet spot)
+                        </li>
+                        <li><strong>NIFTY Weekly Expiry (Tuesdays):</strong> Executes <code>src/scanners/nifty_hero_zero_expiry_scanner.py</code> on scheduled expiry intervals.</li>
+                        <li><strong>BSE SENSEX Weekly Expiry (Thursdays):</strong> Executes <code>src/scanners/sensex_hero_zero_expiry_scanner.py</code> on scheduled expiry intervals.</li>
+                        <li><strong>3:50 PM Post-Settlement Audit (<code>hero_zero_350pm_summary.py</code>):</strong> Audits executed recommendations chronologically against 1-minute historical candles from Kite Connect. Flags T1 hits (+100%), T2 Multibaggers (+300%), trailing stop loss at cost, or strict 50% stop loss. Dispatches session scorecard to Telegram.</li>
+                        <li><strong>Dedicated Delivery Bot:</strong> Sent via <code>@Nifty_stage10_paper_bot</code> (Token: <code>8904189417:AAEb6EyPZekaSrgAo5HYPqhROgCsD-g6_d0</code>).</li>
+                        <li><strong>V14.7 Stage 10 Styling:</strong> Formatted with V14.7 Stage 10 <code>TelegramGUI</code> card layout (<code>DIVIDER = "──────────────────────"</code>, <code>tg_code</code>, <code>tg_money</code>, <code>tg_points</code>, and 3-attempt API retry logic).</li>
+                    </ul>
+                </div>
+
+                <div class="scanner-section" style="margin-top: 30px;">
+                    <h3>⚡ Executable Commands & Cron Schedule</h3>
+                    <div class="improvement-card">
+                        <h4>1️⃣ Manual / Off-Schedule Test Commands</h4>
+                        <div class="code-block"># Run NIFTY Hero-Zero Scanner (Single Best Candidate):
+python src/scanners/nifty_hero_zero_expiry_scanner.py --force --dry-run
+
+# Run BSE SENSEX Hero-Zero Scanner (Single Best Candidate):
+python src/scanners/sensex_hero_zero_expiry_scanner.py --force --dry-run
+
+# Optional Strangle Mode (Both CE and PE):
+python src/scanners/sensex_hero_zero_expiry_scanner.py --force --both
+
+# Run 3:50 PM Expiry Performance Summary & Audit:
+python src/scanners/hero_zero_350pm_summary.py --force --dry-run</div>
+
+                        <h4 style="margin-top: 20px;">2️⃣ Automated Oracle VM Cron Schedule (vm_crontab_master.txt)</h4>
+                        <div class="code-block"># Tuesdays (NIFTY Expiry: 14:00, 14:30, 15:00, 15:05, 15:10):
+00,30 14 * * 2 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
+00,05,10 15 * * 2 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
+
+# Thursdays (BSE SENSEX Expiry: 14:00, 14:30, 15:00, 15:05, 15:10):
+00,30 14 * * 4 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
+00,05,10 15 * * 4 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
+
+# 03:50 PM Hero-Zero Expiry Final Settlement & Performance Summary (Tuesdays & Thursdays):
+50 15 * * 2,4 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/hero_zero_350pm_summary.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_hero_zero_summary.log 2>&1</div>
                     </div>
                 </div>
             </div>
@@ -1928,15 +2060,20 @@ cat logs/intraday_scan_powerful_sl*.json</div>
                     <ul style="list-style-type: none; padding-left: 20px; line-height: 2;">
                         <li>✅ <strong>docs/IMPLEMENTATION_REPORT.html</strong> - [YOU ARE HERE] The Single Source of Truth HTML with tabs, decision trees, and graphics.</li>
                         <li>✅ <strong>docs/DOCUMENTATION.md</strong> - The markdown version of this exact file for Github/Code editors.</li>
+                        <li>✅ <strong>reports/TCS_BTST_Options_Trade_Analysis.docx</strong> - Formatted Word Document breakdown for the TCS BTST Trade Setup & Selection Rationale.</li>
                     </ul>
 
-                    <h3 style="color: #667eea; margin-top: 25px; margin-bottom: 15px;">2. Core Executable Scanners</h3>
+                    <h3 style="color: #667eea; margin-top: 25px; margin-bottom: 15px;">2. Core Executable Scanners & Engines</h3>
                     <ul style="list-style-type: none; padding-left: 20px; line-height: 2;">
+                        <li>✅ <strong>src/scanners/options_data_provider.py</strong> - Real-Time ATM Strike Price & Live Market Resolution Engine (Kite Connect Quotes + NFO Master + Black-Scholes Greeks + 4-Layer SL + Lot Sizing).</li>
                         <li>✅ <strong>src/scanners/run_options_intraday_scan_powerful_sl.py</strong> - The Intraday Scanner (Runs 9:50 AM to 3:25 PM)</li>
                         <li>✅ <strong>src/scanners/run_btst_options_scan_powerful_sl.py</strong> - The BTST & Nifty Overnight Scanner (Runs 3:00 PM to 3:25 PM)</li>
                         <li>✅ <strong>src/scanners/news_scanner_with_twitter.py</strong> - Pre-Market News & Twitter Scanner (Runs 8:30 AM)</li>
                         <li>✅ <strong>src/scanners/powerful_sl_module.py</strong> - The internal math engine for the 4-Layer Stop Loss Strategy.</li>
                         <li>✅ <strong>src/scanners/btst_smart_exit_strategy.py</strong> - The internal engine for the morning gap-down protection logic.</li>
+                        <li>✅ <strong>src/scanners/nifty_hero_zero_expiry_scanner.py</strong> - Dedicated NIFTY Expiry Hero-Zero Scanner (Tuesdays from 02:00 PM onwards -> @Nifty_stage10_paper_bot & "Nifty v14.9 Paper Trading" Group).</li>
+                        <li>✅ <strong>src/scanners/sensex_hero_zero_expiry_scanner.py</strong> - Dedicated BSE SENSEX Expiry Hero-Zero Scanner (Thursdays from 02:00 PM onwards -> @Nifty_stage10_paper_bot & "Nifty v14.9 Paper Trading" Group).</li>
+                        <li>✅ <strong>src/scanners/hero_zero_350pm_summary.py</strong> - 03:50 PM Expiry Final Settlement & Performance Audit Engine (Chronological 1-min candle evaluation -> @Nifty_stage10_paper_bot).</li>
                     </ul>
 
                     <h3 style="color: #ef4444; margin-top: 25px; margin-bottom: 15px;">3. Cleaned Up / Deprecated Scripts (.trash)</h3>

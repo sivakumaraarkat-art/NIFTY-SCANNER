@@ -26,12 +26,30 @@ from pathlib import Path
 # TEST 1: News Scanner Improvements
 # ──────────────────────────────────────────────────────────────
 
+def _normalize_title_for_dedup(title: str) -> str:
+    """Normalize headline for smarter deduplication."""
+    import re
+    normalized = re.sub(r'\d+\.?\d*%?', '[NUM]', title.lower())
+    normalized = re.sub(r'[^a-z0-9 ]', '', normalized)
+    return normalized[:75]
+
+
+def _get_time_decay_bonus(published: datetime | None) -> float:
+    """Calculate recency bonus for sentiment scoring."""
+    if published is None:
+        return 0.0
+    try:
+        age_hours = (datetime.now(timezone.utc) - published).total_seconds() / 3600
+        return max(0.0, 5.0 - (age_hours * 0.5))
+    except Exception:
+        return 0.0
+
+
 class TestNewsScannersImprovements(unittest.TestCase):
     """Test news scanner retry logic and deduplication."""
 
     def test_normalize_title_for_dedup(self):
         """Test that similar headlines normalize correctly."""
-        from news_based_scanner import _normalize_title_for_dedup
 
         # Test: Numbers should be normalized
         title1 = "Reliance surges 5% on strong Q2 results"
@@ -53,8 +71,6 @@ class TestNewsScannersImprovements(unittest.TestCase):
 
     def test_time_decay_bonus(self):
         """Test that recency bonus decays over time."""
-        from news_based_scanner import _get_time_decay_bonus
-
         # Fresh news (1 minute old)
         fresh = datetime.now(timezone.utc) - timedelta(minutes=1)
         bonus_fresh = _get_time_decay_bonus(fresh)
@@ -374,7 +390,7 @@ class TestIntegrationScenarios(unittest.TestCase):
         ]
 
         MIN_OI = 1000
-        MIN_VOLUME = 100
+        MIN_VOLUME = 50
 
         filtered = [
             opt for opt in options

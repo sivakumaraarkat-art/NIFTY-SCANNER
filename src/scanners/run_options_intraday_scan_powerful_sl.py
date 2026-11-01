@@ -150,11 +150,63 @@ def get_latest_news_symbols(log_dir: Path) -> list:
         for sym, d in data["data"].items():
             sent = d.get("sentiment", "")
             if "BULLISH" in sent or "BEARISH" in sent:
-                raw_score = d.get("avg_score", d.get("score", 70))
-                symbols_with_sentiment.append((sym, sent, abs(int(raw_score))))
+                raw_score = float(d.get("avg_score", d.get("score", 70)))
+                # Direction score: 75=Bullish, 25=Bearish. Convert to conviction score (60-95 scale)
+                if "BEARISH" in sent:
+                    conviction_score = int(min(95, max(60, 100.0 - raw_score)))
+                else:
+                    conviction_score = int(min(95, max(60, raw_score)))
+                symbols_with_sentiment.append((sym, sent, conviction_score))
 
         symbols_with_sentiment.sort(key=lambda x: x[2], reverse=True)
     return symbols_with_sentiment
+
+
+# ──────────────────────────────────────────────────────────────
+# 3b. LIVE MARKET F&O MOVERS (Gainers for CE & Losers for PE)
+# ──────────────────────────────────────────────────────────────
+def get_live_market_movers(kite, nfo_instruments, top_n=8) -> list:
+    """Scan live F&O universe (all 200+ exchange stocks) for top gainers (CE) and top losers (PE)."""
+    if kite is None:
+        return []
+    try:
+        fo_names = sorted(list(set(
+            i["name"] for i in nfo_instruments
+            if i["segment"] in ["NFO-FUT", "BFO-FUT"] and i["name"] not in ["NIFTY", "BANKNIFTY", "SENSEX", "FINNIFTY", "MIDCPNIFTY"]
+        )))
+        symbols = [f"NSE:{name}" for name in fo_names]
+        quotes = {}
+        for i in range(0, len(symbols), 250):
+            quotes.update(kite.quote(symbols[i:i+250]))
+
+        bullish = []
+        bearish = []
+        for sym, q in quotes.items():
+            ltp = q.get("last_price", 0.0)
+            ohlc = q.get("ohlc", {})
+            prev_close = ohlc.get("close", 0.0)
+            high = ohlc.get("high", 0.0)
+            low = ohlc.get("low", 0.0)
+            if prev_close <= 0 or ltp < 40:
+                continue
+
+            pct = ((ltp - prev_close) / prev_close) * 100
+            day_range = high - low
+            range_pos = ((ltp - low) / day_range) * 100 if day_range > 0 else 50.0
+            name = sym.replace("NSE:", "")
+
+            if pct >= 0.8 and range_pos >= 70:
+                bullish.append((name, "BULLISH 🚀 (Top Gainer)", int(min(95, 70 + pct * 5))))
+            elif pct <= -0.8 and range_pos <= 30:
+                bearish.append((name, "BEARISH ⚠️ (Top Breakdown)", int(min(95, 70 + abs(pct) * 5))))
+
+        bullish.sort(key=lambda x: x[2], reverse=True)
+        bearish.sort(key=lambda x: x[2], reverse=True)
+
+        return bullish[:top_n] + bearish[:top_n]
+    except Exception as e:
+        print(f"⚠️ Could not fetch market movers: {e}")
+        return []
 
 
 # ──────────────────────────────────────────────────────────────
@@ -171,7 +223,29 @@ def print_powerful_sl_results(candidates: list[dict], account_size: float = 5000
     print(f"⚠️  Intraday execution window: 9:50 AM - 3:25 PM IST")
     print(f"✅ Market hours check: {is_market_hours()}\n")
 
-    for i, c in enumerate(candidates[:5], 1):
+    # Balanced selection: Top CE (Calls) + Top PE (Puts)
+    # News catalyst candidates are prioritized alongside top technical market movers
+    def sort_key(c):
+        is_news = "Top Gainer" not in c.get("sentiment_catalyst", "") and "Top Breakdown" not in c.get("sentiment_catalyst", "")
+        priority = 30 if is_news else 0
+        return priority + c.get("score", 0)
+
+    ce_cands = [c for c in candidates if str(c.get("option_type", "")).upper() == "CE"]
+    pe_cands = [c for c in candidates if str(c.get("option_type", "")).upper() == "PE"]
+    ce_cands.sort(key=sort_key, reverse=True)
+    pe_cands.sort(key=sort_key, reverse=True)
+
+    selected = []
+    for c in ce_cands[:3]:
+        selected.append(c)
+    for c in pe_cands[:3]:
+        selected.append(c)
+    if len(selected) < 4:
+        for c in sorted(candidates, key=sort_key, reverse=True):
+            if c not in selected and len(selected) < 6:
+                selected.append(c)
+
+    for i, c in enumerate(selected, 1):
         contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {c['option_type']}")
         spot_str = f"(Spot: ₹{c.get('spot_price', 0):,.2f})" if c.get('spot_price', 0) > 0 else ""
         print(f"\n{'─' * 100}")
@@ -307,22 +381,36 @@ def main():
         return
 
     candidates_input = []
+    kite = get_kite_client()
+    nfo_instruments = get_nfo_instruments(kite)
+
     if getattr(args, 'use_news_candidates', False):
         news_data = get_latest_news_symbols(Path("logs"))
-        if news_data:
-            bullish = [s[0] for s in news_data if "BULLISH" in s[1]]
-            bearish = [s[0] for s in news_data if "BEARISH" in s[1]]
+        movers_data = get_live_market_movers(kite, nfo_instruments, top_n=6)
 
-            print(f"\n📰 [NEWS INTEGRATION] Dynamic fetch complete from latest morning scan!")
+        # Merge news and movers (avoid duplicates by symbol)
+        seen_syms = set()
+        combined = []
+        for item in (news_data + movers_data):
+            sym = item[0]
+            if sym not in seen_syms:
+                seen_syms.add(sym)
+                combined.append(item)
+
+        if combined:
+            bullish = [s[0] for s in combined if "BULLISH" in s[1]]
+            bearish = [s[0] for s in combined if "BEARISH" in s[1]]
+
+            print(f"\n📰 [NEWS + LIVE MOVERS INTEGRATION] Dynamic fetch complete from News & Live Market!")
             if bullish:
                 print(f"   🟢 BULLISH (Targeting CE): {', '.join(bullish)}")
             if bearish:
                 print(f"   🔴 BEARISH (Targeting PE): {', '.join(bearish)}")
 
-            candidates_input = news_data
-            args.symbols = ",".join([s[0] for s in news_data])
+            candidates_input = combined
+            args.symbols = ",".join([s[0] for s in combined])
         else:
-            print("\n⚠️  [NEWS INTEGRATION] No recent news symbols found. Falling back to default.")
+            print("\n⚠️  [INTEGRATION] No news or movers found. Falling back to default.")
             candidates_input = [(s.strip(), "BULLISH", 70) for s in args.symbols.split(',') if s.strip()]
     else:
         candidates_input = [(s.strip(), "BULLISH", 70) for s in args.symbols.split(',') if s.strip()]
@@ -343,7 +431,12 @@ def main():
     # Print results with powerful SL
     results = print_powerful_sl_results(resolved, args.account_size)
 
-    # Save execution log
+    # Save execution log with an explicit signal observation time.
+    scan_time = datetime.now().astimezone().isoformat(timespec="seconds")
+    for candidate in results:
+        candidate["signal_time"] = scan_time
+        candidate["signal_time_source"] = "scanner_observation_not_broker_fill"
+        candidate["entry_price_source"] = "scanner_quote_ltp_not_broker_fill"
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     log_file = log_dir / f"intraday_scan_powerful_sl_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -384,3 +477,4 @@ Summary:
 
 if __name__ == "__main__":
     main()
+

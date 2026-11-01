@@ -44,14 +44,17 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 # Ensure project root in sys.path
-ROOT = Path(__file__).resolve().parents[2]
+from btst_batch import (project_root, logs_directory, select_candidates, create_batch,
+                        record_delivery, batch_path, now_ist, INDEX_SYMBOLS)
+ROOT = project_root(__file__)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
     from telegram_alerts.options_alert_sender import send_options_telegram_alerts
 except ImportError:
-    send_options_telegram_alerts = lambda *args, **kwargs: None
+    def send_options_telegram_alerts(*args, **kwargs):
+        raise RuntimeError("Telegram sender unavailable; install telegram_alerts/options_alert_sender.py")
 
 try:
     from src.scanners.options_data_provider import (
@@ -94,11 +97,10 @@ NSE_HOLIDAYS_2026 = [
 
 def is_trading_day() -> bool:
     """Check if today is a valid NSE trading day."""
-    today = datetime.now()
+    today = now_ist()
     if today.weekday() >= 5:
         return False
-    today_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
-    if today_date in NSE_HOLIDAYS_2026:
+    if today.date() in {holiday.date() for holiday in NSE_HOLIDAYS_2026}:
         return False
     return True
 
@@ -106,31 +108,9 @@ def is_trading_day() -> bool:
 # ──────────────────────────────────────────────────────────────
 # 2. LOG ROTATION
 # ──────────────────────────────────────────────────────────────
-def cleanup_old_logs(log_dir: Path = Path("logs"), days_to_keep: int = 30) -> None:
-    """Delete log files older than specified days."""
-    if not log_dir.exists():
-        return
-    now = datetime.now()
-    cutoff = now - timedelta(days=days_to_keep)
-    deleted_count = 0
-    try:
-        for log_file in log_dir.glob("*.json"):
-            try:
-                file_mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
-                if file_mtime < cutoff:
-                    log_file.unlink()
-                    deleted_count += 1
-            except Exception:
-                pass
-        if deleted_count > 0:
-            print(f"🗑️  Log rotation: Cleaned up {deleted_count} log files older than {days_to_keep} days")
-    except Exception:
-        pass
-
-
 def is_market_hours() -> bool:
     """Check if current time is valid for BTST scanner (2:30 PM to 3:30 PM)."""
-    now = datetime.now().time()
+    now = now_ist().time()
     return time_type(14, 30) <= now <= time_type(15, 30)
 
 
@@ -164,8 +144,13 @@ def get_latest_news_symbols(log_dir: Path) -> list:
         for sym, d in data["data"].items():
             sent = d.get("sentiment", "")
             if "BULLISH" in sent or "BEARISH" in sent:
-                raw_score = d.get("avg_score", d.get("score", 70))
-                symbols_with_sentiment.append((sym, sent, abs(int(raw_score))))
+                raw_score = float(d.get("avg_score", d.get("score", 70)))
+                # Direction score: 75=Bullish, 25=Bearish. Convert to conviction score (60-95 scale)
+                if "BEARISH" in sent:
+                    conviction_score = int(min(95, max(60, 100.0 - raw_score)))
+                else:
+                    conviction_score = int(min(95, max(60, raw_score)))
+                symbols_with_sentiment.append((sym, sent, conviction_score))
 
         symbols_with_sentiment.sort(key=lambda x: x[2], reverse=True)
     return symbols_with_sentiment
@@ -225,18 +210,14 @@ def print_btst_results(stock_candidates: list[dict], index_candidates: list[dict
     print("\n" + "=" * 100)
     print("🌙 BTST OPTIONS SCANNER — POWERFUL 4-LAYER SL STRATEGY (CE & PE)".center(100))
     print("=" * 100)
-    print(f"\n📅 {datetime.now().strftime('%d-%b-%Y %H:%M %p')}")
+    print(f"\n📅 {now_ist().strftime('%d-%b-%Y %H:%M %p')}")
     print(f"⚠️  BTST execution window: 3:00 PM - 3:25 PM IST (Next day exit: 9:15 AM)")
     print(f"✅ Market hours check: {is_market_hours()}\n")
 
-    # Balanced Stock Options (Top CE + Top PE)
-    ce_stocks = [c for c in stock_candidates if c.get("option_type") == "CE"]
-    pe_stocks = [c for c in stock_candidates if c.get("option_type") == "PE"]
-
-    selected_stocks = ce_stocks[:2] + pe_stocks[:2]
-    if len(selected_stocks) < 4:
-        remaining = [c for c in stock_candidates if c not in selected_stocks]
-        selected_stocks.extend(remaining[:4 - len(selected_stocks)])
+    # Select ONCE. Printing, persistence and Telegram share this ordered selection.
+    selected = select_candidates(stock_candidates, index_candidates)
+    selected_stocks = [c for c in selected if c['symbol'] not in INDEX_SYMBOLS]
+    index_candidates = [c for c in selected if c['symbol'] in INDEX_SYMBOLS]
 
     print("━" * 100)
     print(f"📊 TOP STOCK OPTIONS CANDIDATES ({len(selected_stocks)})")
@@ -260,7 +241,7 @@ def print_btst_results(stock_candidates: list[dict], index_candidates: list[dict
         print(f"📈 TOP INDEX OPTIONS CANDIDATES ({len(index_candidates)})")
         print("━" * 100)
 
-        for i, c in enumerate(index_candidates[:2], 1):
+        for i, c in enumerate(index_candidates, 1):
             opt_type = c.get('option_type', 'CE')
             icon = "🟢" if opt_type == "CE" else "🔴"
             contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {opt_type}")
@@ -331,13 +312,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Bypass trading day check for testing/offline analysis",
     )
+    parser.add_argument("--log-dir", help="Shared BTST log directory (or BTST_LOG_DIR)")
+    parser.add_argument("--dry-run", action="store_true", help="Resolve and print only; no Telegram or daily batch")
     return parser.parse_args()
 
 
 def export_scan_config(args, result_count: int, symbols_scanned: list[str]) -> dict:
     """Export scan configuration for audit trail."""
     return {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": now_ist().isoformat(),
         "script": "run_btst_options_scan_powerful_sl",
         "symbols_scanned": symbols_scanned,
         "num_symbols": len(symbols_scanned),
@@ -351,8 +334,12 @@ def export_scan_config(args, result_count: int, symbols_scanned: list[str]) -> d
 
 def main():
     """Main execution function."""
-    cleanup_old_logs(Path("logs"), days_to_keep=30)
     args = parse_args()
+    log_dir = logs_directory(__file__, args.log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    if not args.dry_run and batch_path(log_dir, now_ist().date()).exists():
+        print("BTST batch already exists today. Skipping rerun to preserve the original alerts.")
+        return
 
     if not args.ignore_holiday and not is_trading_day():
         print("\n⚠️  HALT: Today is NOT a trading day (weekend or NSE holiday)")
@@ -364,7 +351,7 @@ def main():
     nfo_instruments = get_nfo_instruments(kite)
 
     if getattr(args, 'use_news_candidates', False):
-        news_data = get_latest_news_symbols(Path("logs"))
+        news_data = get_latest_news_symbols(log_dir)
         movers_data = get_live_market_movers(kite, nfo_instruments, top_n=6)
 
         # Merge news and movers (avoid duplicates by symbol)
@@ -404,7 +391,6 @@ def main():
     )
 
     # Filter candidates by theta decay limit for BTST
-    INDEX_SYMBOLS = ["NIFTY", "SENSEX", "BANKNIFTY"]
     stock_candidates = [
         c for c in resolved
         if c['symbol'] not in INDEX_SYMBOLS and passes_theta_filter(c['theta'], c['ltp'])
@@ -422,19 +408,20 @@ def main():
     all_results = print_btst_results(stock_candidates, index_candidates, args.account_size)
 
     # Save execution log
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / f"btst_options_scan_powerful_sl_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    log_file = log_dir / f"btst_options_scan_powerful_sl_{now_ist().strftime('%Y%m%d_%H%M%S')}.json"
 
     log_data = {
         "execution": export_scan_config(args, len(all_results), args.symbols.split(",")),
-        "stocks": stock_candidates,
-        "index": index_candidates,
+        "selected_candidates": all_results,
+        "stocks": [c for c in all_results if c['symbol'] not in INDEX_SYMBOLS],
+        "index": [c for c in all_results if c['symbol'] in INDEX_SYMBOLS],
+        "all_candidates": {"stocks": stock_candidates, "index": index_candidates},
+        "dry_run": args.dry_run,
         "sl_strategy": "Powerful 4-Layer (BTST-optimized, Theta-focused)",
         "summary": {
             "total_candidates": len(all_results),
-            "stocks_count": len(stock_candidates),
-            "index_count": len(index_candidates),
+            "stocks_count": sum(c["symbol"] not in INDEX_SYMBOLS for c in all_results),
+            "index_count": sum(c["symbol"] in INDEX_SYMBOLS for c in all_results),
             "min_score_filtered": args.min_score,
             "sl_method": "Powerful 4-Layer Protection",
             "whipsaw_protection": "YES - 4 defensive layers",
@@ -446,17 +433,31 @@ def main():
 
     print(f"\n✅ Execution log saved: {log_file}\n")
 
-    # Send Telegram Alerts
-    print("[*] Dispatching alerts to Telegram...")
-    send_options_telegram_alerts(all_results, strategy_name="🌙 BTST OVERNIGHT OPTIONS")
-    print("✅ Telegram alerts sent successfully!")
+    if args.dry_run:
+        print("DRY RUN: no Telegram messages sent and no daily alert batch created.")
+        return
+    try:
+        selection_path, batch = create_batch(log_dir, all_results, log_file.name)
+    except FileExistsError:
+        print("Another scanner has already saved today's batch; no duplicate alerts sent.")
+        return
+    print(f"Selected batch: {batch['batch_id']} ({selection_path})")
+    print("[*] Dispatching the saved selection to Telegram...")
+    receipt = send_options_telegram_alerts(
+        all_results, strategy_name="🌙 BTST OVERNIGHT OPTIONS", exact_selection=True,
+        batch_id=batch["batch_id"],
+        on_delivery=lambda candidate, ok: record_delivery(selection_path, batch, candidate, ok),
+    )
+    if not receipt or not receipt["header_sent"] or not all(receipt["cards_sent"]):
+        raise RuntimeError("Telegram delivery incomplete/unknown. Inspect saved batch; no automatic resend.")
+    print(f"Telegram confirmed delivery of {len(all_results)} selected cards.")
 
     print("=" * 100)
     print("🎯 READY FOR BTST EXECUTION!".center(100))
     print("=" * 100)
     print(f"""
 Summary:
-  • Candidates found: {len(all_results)} (Stocks: {len(stock_candidates)}, Indices: {len(index_candidates)})
+  • Selected/alerted: {len(all_results)} (Qualified pool: {len(stock_candidates)} stocks, {len(index_candidates)} indices)
   • SL Strategy: Powerful 4-Layer (BTST Theta-optimized)
   • Risk method: 1% of account per trade (Lot-aware)
   • Expected execution: 3:00 PM - 3:25 PM IST

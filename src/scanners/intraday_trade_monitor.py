@@ -1,14 +1,13 @@
 """Poll intraday scan signals and persist first observed T1/T2/SL crossings.
 
-Run every minute during market hours, after the intraday scanner. Timestamps
-are observation times from polling, not broker order/fill timestamps.
+Run every minute during market hours, after the intraday scanner. Hit times use completed one-minute historical candles, not broker fill times.
 """
 from __future__ import annotations
 
 import json
 import os
 import sys
-from datetime import datetime, time as time_type
+from datetime import datetime, timedelta, time as time_type
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -89,137 +88,83 @@ def load_signals(day_str: str) -> dict[str, dict[str, Any]]:
                     "status": "OPEN",
                     "trade_date": day_str,
                 }
+            else:
+                signals[opt_sym]["last_seen_scan_time"] = scan_time
+                signals[opt_sym]["last_seen_scan_file"] = path.name
     return signals
 
 
+def as_ist(value: Any) -> datetime:
+    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return dt.replace(tzinfo=IST) if dt.tzinfo is None else dt.astimezone(IST)
+
+
 def observe_trades(state: dict[str, Any], signals: dict[str, dict[str, Any]], kite: Any, now: datetime) -> int:
-    new_events = 0
+    """Close on first threshold candle; never infer hit times from daily OHLC.
+
+    Minute bars cannot determine seconds or the ordering of SL and target in
+    the same bar. The partial signal minute is excluded to avoid pre-entry hits.
+    Existing unverified closed records are preserved for explicit reconciliation.
+    """
+    now = as_ist(now)
     trades = state.setdefault("trades", {})
+    tokens = None
+    new_events = 0
     for trade_id, sig in signals.items():
-        trade = trades.setdefault(trade_id, dict(sig))
+        trade = trades.get(trade_id)
+        if trade is None or trade.get("trade_date") != sig.get("trade_date"):
+            if trade is not None:
+                trades[f"{trade.get('trade_date')}:{trade_id}"] = dict(trade)
+            trade = trades[trade_id] = dict(sig)
         if trade.get("status") != "OPEN":
             continue
-
-        high = None
-        low = None
-        signal_time_str = trade.get("signal_time")
-        t1 = trade["t1"]
-        t2 = trade["t2"]
-        sl = trade["stop_loss"]
-        hit_timestamp = None
-
-        # Fetch minute historical candles from signal_time onwards up to market close (or now if during market hours)
-        if kite is not None and signal_time_str:
-            try:
-                opt_sym = trade["option_symbol"]
-                from_dt = datetime.fromisoformat(signal_time_str.replace("Z", "+00:00"))
-                if from_dt.tzinfo is None:
-                    from_dt = from_dt.replace(tzinfo=IST)
-
-                # Cap historical candle query end time to market close (15:30:00) on trade date
-                trade_date_dt = from_dt.replace(hour=15, minute=30, second=0, microsecond=0)
-                query_end = min(now, trade_date_dt)
-
-                instruments = kite.instruments("NFO")
-                token = None
-                for inst in instruments:
-                    if inst["tradingsymbol"] == opt_sym:
-                        token = inst["instrument_token"]
-                        break
-                if token and from_dt < query_end:
-                    candles = kite.historical_data(token, from_dt, query_end, "minute")
-                    if candles:
-                        high = max(c["high"] for c in candles)
-                        low = min(c["low"] for c in candles)
-                        # Set hit time to the candle timestamp where target/SL was first breached
-                        for c_candle in candles:
-                            c_high = c_candle["high"]
-                            c_low = c_candle["low"]
-                            c_time = c_candle["date"]
-                            if sl and c_low <= sl and c_low > 0:
-                                hit_event = "SL_HIT"
-                                hit_price = sl
-                                hit_timestamp = c_time
-                                break
-                            elif t2 and c_high >= t2:
-                                hit_event = "T2_HIT"
-                                hit_price = t2
-                                hit_timestamp = c_time
-                                break
-                            elif t1 and c_high >= t1:
-                                hit_event = "T1_HIT"
-                                hit_price = t1
-                                hit_timestamp = c_time
-                                break
-            except Exception as e:
-                print(f"⚠️ Error fetching post-signal historical candles for {trade['option_symbol']}: {e}")
-
-        # Fallback to quote OHLC if historical candles couldn't be fetched
-        if high is None or low is None:
-            if kite is not None:
-                try:
-                    opt_sym = trade["option_symbol"]
-                    q = kite.quote([f"NFO:{opt_sym}", f"BFO:{opt_sym}"])
-                    quote = q.get(f"NFO:{opt_sym}", q.get(f"BFO:{opt_sym}", {}))
-                    if quote:
-                        ltp = float(quote.get("last_price", 0) or 0)
-                        ohlc = quote.get("ohlc", {})
-                        high = float(ohlc.get("high", ltp) or ltp)
-                        low = float(ohlc.get("low", ltp) or ltp)
-                except Exception:
-                    pass
-
-        # Offline fallback simulation if kite is not available
-        if high is None or low is None:
-            entry = trade["entry_price"]
-            t1 = trade["t1"]
-            sl = trade["stop_loss"]
-            sym = trade["symbol"]
-
-            if sym == "TITAN":
-                high = entry * 0.95
-                low = sl * 0.98
-            else:
-                high = t1 * 1.01
-                low = sl * 1.05
-
-        t1 = trade["t1"]
-        t2 = trade["t2"]
-        sl = trade["stop_loss"]
-
-        hit_event = None
-        hit_price = None
-        hit_timestamp = None
-
-        # Check SL first or Target first based on exact post-signal high/low
-        if low and sl and low <= sl and low > 0:
-            hit_event = "SL_HIT"
-            hit_price = sl
-        elif high and t2 and high >= t2:
-            hit_event = "T2_HIT"
-            hit_price = t2
-        elif high and t1 and high >= t1:
-            hit_event = "T1_HIT"
-            hit_price = t1
-
-        if hit_event:
-            trade["status"] = "CLOSED"
-            trade["close_reason"] = hit_event
-            trade["close_price"] = hit_price
-            # Use exact intraday historical candle timestamp if available, else clamp to market close (15:30:00)
-            if hit_timestamp:
-                trade["close_time"] = hit_timestamp.isoformat() if hasattr(hit_timestamp, "isoformat") else str(hit_timestamp)
-            else:
-                market_close_dt = now.replace(hour=15, minute=30, second=0, microsecond=0)
-                trade["close_time"] = market_close_dt.isoformat()
-
-            trade["target_reached_time"] = trade["close_time"] if hit_event in {"T1_HIT", "T2_HIT"} else None
-            entry = trade["entry_price"]
-            total_shares = trade["lots"] * trade["lot_size"]
-            trade["pnl"] = (hit_price - entry) * total_shares
-            trade["pnl_pct"] = ((hit_price - entry) / entry) * 100 if entry else 0.0
-            new_events += 1
-
+        trade["data_status"] = "unavailable"
+        if kite is None:
+            continue
+        try:
+            start = as_ist(trade["signal_time"])
+            end = min(now, start.replace(hour=15, minute=30, second=0, microsecond=0))
+            if start >= end:
+                continue
+            if tokens is None:
+                tokens = {i["tradingsymbol"]: i["instrument_token"] for i in kite.instruments("NFO")}
+            token = tokens.get(trade["option_symbol"])
+            if token is None:
+                continue
+            candles = kite.historical_data(token, start, end, "minute")
+            valid = []
+            for candle in candles:
+                stamp = as_ist(candle["date"])
+                if (start <= stamp and stamp + timedelta(minutes=1) <= end
+                        and stamp.date() == start.date()
+                        and time_type(9, 15) <= stamp.time() < MARKET_CLOSE):
+                    valid.append((stamp, candle))
+            trade["data_status"] = "minute_candles" if valid else "unavailable"
+            for stamp, candle in sorted(valid, key=lambda item: item[0]):
+                high, low = float(candle["high"]), float(candle["low"])
+                t1, t2, sl = trade["t1"], trade["t2"], trade["stop_loss"]
+                stop = bool(sl and 0 < low <= sl)
+                target2 = bool(t2 and high >= t2)
+                target1 = bool(t1 and high >= t1)
+                if not (stop or target1 or target2):
+                    continue
+                if stop and (target1 or target2):
+                    trade["data_status"] = "ambiguous_target_sl"
+                    trade["ambiguous_time"] = stamp.isoformat()
+                    break
+                reason, price = ("SL_HIT", sl) if stop else (("T2_HIT", t2) if target2 else ("T1_HIT", t1))
+                trade.update(status="CLOSED", close_reason=reason, close_price=price,
+                             close_time=stamp.isoformat(), hit_time_source="minute_candle",
+                             hit_time_precision="minute", observed_at=now.isoformat())
+                trade["target_reached_time"] = stamp.isoformat() if not stop else None
+                entry = trade["entry_price"]
+                trade["pnl"] = (price - entry) * trade["lots"] * trade["lot_size"]
+                trade["pnl_pct"] = (price - entry) / entry * 100 if entry else 0.0
+                new_events += 1
+                break
+        except Exception as exc:
+            trade["data_status"] = "unavailable"
+            print(f"Historical data unavailable for {trade['option_symbol']}: {type(exc).__name__}")
     return new_events
 
 

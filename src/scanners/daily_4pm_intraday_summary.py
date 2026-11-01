@@ -4,7 +4,7 @@ from __future__ import annotations
 import html
 import json
 import os
-from datetime import datetime
+from datetime import datetime, time as time_type
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -25,17 +25,38 @@ def send_telegram_message(message: str) -> bool:
     if not token or not chat:
         print("Telegram credentials missing; report printed locally only.")
         return False
-    try:
-        response = requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat, "text": message, "parse_mode": "HTML", "disable_web_page_preview": True},
-            timeout=15,
-        )
-        response.raise_for_status()
-        return True
-    except Exception as exc:
-        print(f"Telegram delivery error: {exc}")
-        return False
+
+    # Telegram limit is 4096 characters. Chunk cleanly at newlines if needed.
+    chunks = []
+    if len(message) <= 3800:
+        chunks = [message]
+    else:
+        current_chunk = []
+        current_len = 0
+        for line in message.split("\n"):
+            if current_len + len(line) + 1 > 3800 and current_chunk:
+                chunks.append("\n".join(current_chunk))
+                current_chunk = [line]
+                current_len = len(line) + 1
+            else:
+                current_chunk.append(line)
+                current_len += len(line) + 1
+        if current_chunk:
+            chunks.append("\n".join(current_chunk))
+
+    success = True
+    for chunk in chunks:
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat, "text": chunk, "parse_mode": "HTML", "disable_web_page_preview": True},
+                timeout=15,
+            )
+            response.raise_for_status()
+        except Exception as exc:
+            print(f"Telegram delivery error: {exc}")
+            success = False
+    return success
 
 
 def load_trades() -> tuple[list[dict[str, Any]], int]:
@@ -90,16 +111,31 @@ def render_report() -> str | None:
         close_price = float(trade.get("close_price", 0) or 0)
         pnl = float(trade.get("pnl", 0) or 0)
         pnl_pct = float(trade.get("pnl_pct", 0) or 0)
-        target_reached_time = format_time(trade.get("target_reached_time") or trade.get("close_time"))
+        show_time_str = ""
+        hit_time = "Unavailable (unverified legacy record)"
+        if trade.get("hit_time_source") == "minute_candle":
+            try:
+                dt = datetime.fromisoformat(str(trade.get("close_time")).replace("Z", "+00:00"))
+                dt = dt.replace(tzinfo=IST) if dt.tzinfo is None else dt.astimezone(IST)
+                if dt.strftime("%Y%m%d") == trade.get("trade_date") and time_type(9, 15) <= dt.time() < time_type(15, 30):
+                    hit_time = dt.strftime("%H:%M IST") + " (1-minute candle)"
+            except (ValueError, TypeError):
+                pass
+        elif reason == "OPEN":
+            hit_time = "Not observed"
+            if trade.get("data_status") == "unavailable":
+                hit_time = "Unavailable (market data missing)"
+            elif trade.get("data_status") == "ambiguous_target_sl":
+                hit_time = "Target / SL order unknown in same candle"
 
         if reason == "T2_HIT":
-            status_str = f"<b>TARGET 2 HIT 🔥</b> (at {target_reached_time})"
+            status_str = f"<b>TARGET 2 HIT 🔥</b>{show_time_str}"
             display_price = f"Target (₹{trade.get('t2', 0):.2f})"
         elif reason == "T1_HIT":
-            status_str = f"<b>TARGET 1 HIT 🎯</b> (at {target_reached_time})"
+            status_str = f"<b>TARGET 1 HIT 🎯</b>{show_time_str}"
             display_price = f"Target (₹{trade.get('t1', 0):.2f})"
         elif reason == "SL_HIT":
-            status_str = f"<b>SL HIT 🛑</b> (at {target_reached_time})"
+            status_str = f"<b>SL HIT 🛑</b>{show_time_str}"
             display_price = f"SL (₹{trade.get('stop_loss', 0):.2f})"
         else:
             status_str = f"<b>{reason}</b>"
@@ -112,6 +148,7 @@ def render_report() -> str | None:
             f"\n🟢 <b>#{i} {symbol}</b>",
             f"├─ 📈 <b>Entry:</b> <code>₹{entry:.2f}</code> → <b>Exit:</b> <code>{display_price}</code>",
             f"├─ 🎯 <b>Status:</b> {status_str}",
+            f"├─ 🕒 <b>Hit time:</b> <code>{html.escape(hit_time)}</code>",
             f"└─ 💵 <b>P&L:</b>    <b>{pnl_str}</b> (<b>{pct_str}</b>)",
         ])
 
@@ -121,9 +158,9 @@ def render_report() -> str | None:
     lines.extend([
         DIVIDER,
         f"💼 <b>TOTAL CAPITAL:</b> <code>₹{total_capital:,.0f}</code>",
-        f"💰 <b>NET P&L TODAY:</b>  <b>{net_pnl_str}</b> (<b>+{net_pct:.1f}%</b>)",
+        f"💰 <b>NET P&L TODAY:</b>  <b>{net_pnl_str}</b> (<b>{net_pct:+.1f}%</b>)",
         DIVIDER,
-        "<i>Summary excludes duplicate scans of the same contract. All evaluations strictly use post-signal price action.</i>"
+        "<i>Summary excludes duplicate scans of the same contract. Hit times have minute precision, not exact seconds. Legacy records require reconciliation. The partial signal minute is excluded. Exit uses the first threshold candle; same-candle T2 takes precedence over T1.</i>"
     ])
     return "\n".join(lines)
 

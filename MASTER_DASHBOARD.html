@@ -1,0 +1,1892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NiftyScanner - Unified Master Control Dashboard</title>
+    <style>
+        :root {
+            --bg-base: #0a0e17;
+            --bg-card: #121826;
+            --bg-card-hover: #1a2236;
+            --bg-subtle: #1e293b;
+            --border: #23304a;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.25);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.25);
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.25);
+            --warning: #f59e0b;
+            --info: #0ea5e9;
+            --purple: #a855f7;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-faint: #64748b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1420px;
+            margin: 0 auto;
+        }
+
+        /* --- HEADER & LIVE BADGE --- */
+        header {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #1e293b 100%);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 28px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header-title h1 {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(to right, #ffffff, #c7d2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+            letter-spacing: -0.5px;
+        }
+
+        .header-title p {
+            color: #a5b4fc;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .header-status {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .status-pill {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 18px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .status-pill .pulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--success);
+            box-shadow: 0 0 12px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.6; }
+        }
+
+        .time-box {
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            font-size: 14px;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+
+        /* --- STATS GRID --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 18px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.15);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .stat-card.c-blue::before { background: var(--info); }
+        .stat-card.c-purple::before { background: var(--purple); }
+        .stat-card.c-green::before { background: var(--success); }
+        .stat-card.c-amber::before { background: var(--warning); }
+
+        .stat-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .stat-val {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .stat-sub {
+            font-size: 12px;
+            color: var(--text-faint);
+        }
+
+        /* --- SECTION HEADERS & TABS --- */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+            margin-top: 28px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            background: var(--bg-card);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        .tab-btn:hover:not(.active) {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* --- TIMELINE COMPONENT --- */
+        .timeline-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 26px;
+            margin-bottom: 32px;
+        }
+
+        .timeline-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+        }
+
+        .timeline-flow::before {
+            content: '';
+            position: absolute;
+            left: 31px;
+            top: 20px;
+            bottom: 20px;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--primary), var(--success), var(--warning), var(--purple));
+            opacity: 0.4;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            position: relative;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 16px 20px;
+            border-radius: 14px;
+            transition: all 0.25s ease;
+        }
+
+        .timeline-item:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--primary);
+            transform: translateX(4px);
+        }
+
+        .time-badge {
+            min-width: 64px;
+            padding: 8px 10px;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: #38bdf8;
+            text-align: center;
+            z-index: 2;
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .timeline-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .bot-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            font-family: monospace;
+        }
+
+        .bot-tag.green {
+            background: rgba(16, 185, 129, 0.15);
+            color: #6ee7b7;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .bot-tag.amber {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fcd34d;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .timeline-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* --- 3-BOT TELEGRAM SHOWCASE --- */
+        .bots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 22px;
+            margin-bottom: 32px;
+        }
+
+        .bot-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .bot-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .bot-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+
+        .bot-icon.shield { background: rgba(99, 102, 241, 0.2); border: 1px solid var(--primary); }
+        .bot-icon.lightning { background: rgba(14, 165, 233, 0.2); border: 1px solid var(--info); }
+        .bot-icon.chart { background: rgba(16, 185, 129, 0.2); border: 1px solid var(--success); }
+
+        .bot-details h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .bot-details p {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: monospace;
+        }
+
+        /* Mock Telegram Message Container */
+        .tg-mock {
+            background: #1e2433;
+            border: 1px solid #2d3748;
+            border-radius: 14px;
+            padding: 18px;
+            font-size: 13px;
+            color: #e2e8f0;
+            line-height: 1.5;
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .tg-mock .tg-divider {
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
+            margin: 10px 0;
+        }
+
+        .tg-mock b {
+            color: #ffffff;
+        }
+
+        .tg-mock code {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #38bdf8;
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            font-size: 12px;
+        }
+
+        .tg-mock i {
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        /* --- 4-PILLAR TURNAROUND BLUEPRINT --- */
+        .pillars-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 18px;
+            margin-bottom: 32px;
+        }
+
+        .pillar-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .pillar-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary);
+        }
+
+        .pillar-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .pillar-card.p-red::before { background: var(--danger); }
+        .pillar-card.p-blue::before { background: var(--info); }
+        .pillar-card.p-green::before { background: var(--success); }
+        .pillar-card.p-amber::before { background: var(--warning); }
+
+        .pillar-card h4 {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pillar-card p {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .pillar-stocks {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: monospace;
+            color: #a5b4fc;
+        }
+
+        /* --- DEMAT HOLDINGS TABLE --- */
+        .table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 24px;
+            margin-bottom: 32px;
+            overflow-x: auto;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .search-input {
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 10px;
+            color: var(--text-main);
+            font-size: 13px;
+            min-width: 280px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        th {
+            background: var(--bg-subtle);
+            color: var(--text-muted);
+            padding: 14px 16px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+            vertical-align: middle;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .sym-cell {
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge-status {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .badge-sell { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-hold { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-avg { background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3); }
+        .badge-filing { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .badge-freeze { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.4); }
+
+        .pnl-pos { color: #34d399; font-weight: 700; }
+        .pnl-neg { color: #f87171; font-weight: 700; }
+
+        /* --- DEFENSIVE COUNTERMEASURES --- */
+        .defenses-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 18px;
+            margin-bottom: 32px;
+        }
+
+        .defense-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            border-left: 4px solid var(--danger);
+        }
+
+        .defense-card h4 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f87171;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .defense-card p {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* --- COMMANDS & FOOTER --- */
+        .code-box {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 16px 20px;
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            font-size: 12px;
+            color: #58a6ff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            overflow-x: auto;
+            gap: 16px;
+        }
+
+        .code-box span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .copy-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .copy-btn:hover {
+            background: #30363d;
+            color: #ffffff;
+        }
+
+        footer {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-faint);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            header { padding: 20px; }
+            .header-title h1 { font-size: 22px; }
+            .bots-grid { grid-template-columns: 1fr; }
+            .pillars-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- HEADER BLOCK -->
+    <header>
+        <div class="header-title">
+            <h1>🛡️ NIFTY SCANNER MASTER CONTROL DASHBOARD</h1>
+            <p>Unified Multi-Engine Trading Systems, 7–10 Day Swing Architecture, Portfolio Turnaround & 5-Bot Telegram Hub</p>
+        </div>
+        <div class="header-status">
+            <div class="status-pill">
+                <div class="pulse-dot"></div>
+                <span>Oracle Cloud VM: <b>Active</b> (<code>140.245.195.112</code>)</span>
+            </div>
+            <div class="status-pill">
+                <span>🕒 IST:</span>
+                <span class="time-box" id="live-clock">--:--:-- IST</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- TOP KPI STATS -->
+    <div class="stats-grid">
+        <div class="stat-card c-purple">
+            <div class="stat-label">🛡️ Portfolio Demat Guard</div>
+            <div class="stat-val">26 Holdings</div>
+            <div class="stat-sub">@Zerodhaportfoliopro_bot (1 User)</div>
+        </div>
+        <div class="stat-card c-blue">
+            <div class="stat-label">🎯 7–10 Day Swing Engine</div>
+            <div class="stat-val">11 Active Trades</div>
+            <div class="stat-sub">@portfolio_bot (Mon 9:30 AM & Fri 3:15 PM)</div>
+        </div>
+        <div class="stat-card c-blue" style="border-left: 4px solid var(--info);">
+            <div class="stat-label">⚡ Options & News Engine</div>
+            <div class="stat-val">18 RSS Feeds</div>
+            <div class="stat-sub">@Swingtradeniftybot (09:50–02:00 IST)</div>
+        </div>
+        <div class="stat-card c-green">
+            <div class="stat-label">📈 NIFTY V14.9 Paper Engine</div>
+            <div class="stat-val">Live Index Signals</div>
+            <div class="stat-sub">@Jinna_Nifty_BOT (2 Users)</div>
+        </div>
+        <div class="stat-card c-purple" style="border-left: 4px solid var(--danger);">
+            <div class="stat-label">🔥 Hero-Zero Expiry Engine</div>
+            <div class="stat-val">2x–5x Payoffs</div>
+            <div class="stat-sub">@Nifty_stage10_paper_bot (Group Chat)</div>
+        </div>
+        <div class="stat-card c-amber">
+            <div class="stat-label">⏰ Crontab Automation</div>
+            <div class="stat-val">14 Active Jobs</div>
+            <div class="stat-sub">06:00 AM – 04:15 PM Mon-Fri</div>
+        </div>
+    </div>
+
+    <!-- 1. VISUAL DAILY TIMELINE -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>⏱️ Daily Operational Timeline (Mon – Fri)</span>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="filterTimeline('all', this)">All Engines (14)</button>
+            <button class="tab-btn" onclick="filterTimeline('swing', this)">🎯 7-10d Swing</button>
+            <button class="tab-btn" onclick="filterTimeline('portfolio', this)">Portfolio Guard</button>
+            <button class="tab-btn" onclick="filterTimeline('options', this)">Options & News</button>
+            <button class="tab-btn" onclick="filterTimeline('hero-zero', this)">🔥 Hero-Zero Expiry</button>
+            <button class="tab-btn" onclick="filterTimeline('nifty', this)">Nifty V14.9</button>
+            <button class="tab-btn" onclick="filterTimeline('system', this)">System Maintenance</button>
+        </div>
+    </div>
+
+    <div class="timeline-container">
+        <div class="timeline-flow" id="timeline-list">
+
+            <!-- 06:00 AM -->
+            <div class="timeline-item" data-category="system">
+                <div class="time-badge">06:00 AM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">Pre-Market Maintenance & 3-Day NFO Dump Rotation</span>
+                        <span class="bot-tag">Linux VM Crontab</span>
+                    </div>
+                    <div class="timeline-desc">Cleans pip cache, __pycache__, /tmp files, drops inactive page caches, ensures 2GB Swap is active, and purges <code>nfo_instruments_*.json</code> (>3d) & JSON logs (>5d).</div>
+                </div>
+            </div>
+
+            <!-- 07:00 AM -->
+            <div class="timeline-item" data-category="system">
+                <div class="time-badge">07:00 AM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">Automated Zerodha Kite Access Token Auth</span>
+                        <span class="bot-tag">KiteConnect TOTP</span>
+                    </div>
+                    <div class="timeline-desc">Generates a fresh 24-hour Zerodha API access token headlessly via pyotp and saves it to <code>/home/ubuntu/NiftyScanner/.kite_access_token</code>.</div>
+                </div>
+            </div>
+
+            <!-- 08:30 AM -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge">08:30 AM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">Pre-Market News Catalyst & Sentiment Scan (Intraday)</span>
+                        <span class="bot-tag">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Scans 18 RSS feeds and BSE/NSE filings for the last 48 hours to discover high-momentum trade catalysts.</div>
+                </div>
+            </div>
+
+            <!-- 09:00 AM -->
+            <div class="timeline-item" data-category="nifty">
+                <div class="time-badge">09:00 AM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">NIFTY V14.9 Paper Trading Engine Launch</span>
+                        <span class="bot-tag amber">@Jinna_Nifty_BOT (2 Users)</span>
+                    </div>
+                    <div class="timeline-desc">Launches the production index trading engine to track live Nifty order flow throughout the day.</div>
+                </div>
+            </div>
+
+            <!-- 09:12 AM -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge">09:12 AM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">BTST Smart Exit Strategy Monitor</span>
+                        <span class="bot-tag">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Checks pre-market gap opens and trailing SLs to exit yesterday's BTST options positions.</div>
+                </div>
+            </div>
+
+            <!-- 09:15 AM - 03:30 PM -->
+            <div class="timeline-item" data-category="portfolio">
+                <div class="time-badge" style="color: #a855f7; border-color: #a855f7;">09:15 AM<br><span style="font-size: 10px; font-weight: 500;">(Live Ticks)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">🛡️ Portfolio Continuous Sentinel (Polls Every 15 Min)</span>
+                        <span class="bot-tag green">@Zerodhaportfoliopro_bot (1 User)</span>
+                    </div>
+                    <div class="timeline-desc">Monitors all 26 Demat holdings silently using live tick prices. Dispatches instant alert cards on state changes, verified 72h filings, or 1-day advance quarterly earnings. Cleanly terminates at <b>03:30 PM IST</b> to prevent RAM leaks.</div>
+                </div>
+            </div>
+
+            <!-- 09:30 AM (Mondays) -->
+            <div class="timeline-item" data-category="swing">
+                <div class="time-badge" style="color: #38bdf8; border-color: #38bdf8;">09:30 AM<br><span style="font-size: 10px; font-weight: 500;">(Mondays)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">🎯 7–10 Day Swing Trade Entry Scan (Full NSE Universe & Predictive Crash Shield)</span>
+                        <span class="bot-tag blue">@portfolio_bot (1 User)</span>
+                    </div>
+                    <div class="timeline-desc">Screens 2,391 NSE equities down to liquid setups (>₹1 Cr turnover), filters out catastrophic risks via the Predictive Crash Shield & Quarterly Earnings Blackout (7–10d window), registers positions in <code>database/active_swing_trades.json</code>, and dispatches multi-horizon target cards (1-Week, 10-Day, 1-Month).</div>
+                </div>
+            </div>
+
+            <!-- 09:50 AM - 02:50 PM (Hourly) -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge" style="color: #38bdf8; border-color: #38bdf8;">09:50 AM<br><span style="font-size: 10px; font-weight: 500;">(Hourly)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">⚡ Live News Catalyst + Intraday Options Scanner (CE & PE)</span>
+                        <span class="bot-tag">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Runs fresh news sentiment scan immediately before each options cycle from <b>09:50 AM to 02:50 PM IST</b> (hourly with flock -w 300). Transitions into afternoon BTST setups. Always provides balanced Top CE & Top PE candidates with 4-Layer SL.</div>
+                </div>
+            </div>
+
+            <!-- 10:00 AM -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge" style="color: #f59e0b; border-color: #f59e0b;">10:00 AM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">🛢️ MCX Crude Oil Momentum Breakout Scan</span>
+                        <span class="bot-tag amber">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Analyzes MCX Crude Oil futures & options contracts, dynamic ATR volatility ranges, and institutional momentum breakouts.</div>
+                </div>
+            </div>
+
+            <!-- 09:52 AM - 03:30 PM (Every 2 Mins) -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge" style="color: #10b981; border-color: #10b981;">09:52 AM<br><span style="font-size: 10px; font-weight: 500;">(Every 2m)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">⏱️ Intraday Trade Monitor & Target/SL Live Tracker</span>
+                        <span class="bot-tag green">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Continuous real-time tracking of active intraday positions every 2 minutes. Logs exact target reached times, trailing stops, and execution timestamps.</div>
+                </div>
+            </div>
+
+            <!-- 11:45 AM -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge" style="color: #10b981; border-color: #10b981;">11:45 AM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">📊 BTST Options & Index Next-Day P&L Summary Report</span>
+                        <span class="bot-tag green">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Automated morning P&L settlement report summarizing overnight gap-up/gap-down performance and realized returns.</div>
+                </div>
+            </div>
+
+            <!-- 02:00 PM - 03:10 PM (Tuesdays & Thursdays) -->
+            <div class="timeline-item" data-category="hero-zero">
+                <div class="time-badge" style="color: #ef4444; border-color: #ef4444;">02:00 PM+<br><span style="font-size: 10px; font-weight: 500;">(Tue & Thu)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">🔥 NIFTY & SENSEX Weekly Expiry Hero-Zero Power Window Scans</span>
+                        <span class="bot-tag red" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.3);">@Nifty_stage10_paper_bot</span>
+                    </div>
+                    <div class="timeline-desc">Runs at 14:00, 14:30, 15:00, 15:05, 15:10 IST on Expiry Days (Tuesdays for NIFTY, Thursdays for SENSEX) to capture explosive Gamma Squeezes. Dispatches low-premium options with asymmetric 2x–5x payoff targets (+100% T1, +300% T2, 50% max SL cap) to Telegram group <b>Nifty v14.9 Paper Trading</b>.</div>
+                </div>
+            </div>
+
+            <!-- 02:30 PM -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge">02:30 PM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">Fresh Afternoon News Catalyst Scan (For BTST)</span>
+                        <span class="bot-tag">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Scans afternoon news (last 8 hrs) to ensure BTST overnight candidates are backed by fresh catalyst drivers.</div>
+                </div>
+            </div>
+
+            <!-- 03:00 PM -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge">03:00 PM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">BTST Options Scan (Stocks & NIFTY + SENSEX)</span>
+                        <span class="bot-tag">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Identifies institutional accumulation setups for overnight gap-up / gap-down continuation with strict strike validation.</div>
+                </div>
+            </div>
+
+            <!-- 03:15 PM (Fridays) -->
+            <div class="timeline-item" data-category="swing">
+                <div class="time-badge" style="color: #38bdf8; border-color: #38bdf8;">03:15 PM<br><span style="font-size: 10px; font-weight: 500;">(Fridays)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">🔔 7–10 Day Swing Trade Exit Evaluation & Performance Return Report</span>
+                        <span class="bot-tag blue">@portfolio_bot (1 User)</span>
+                    </div>
+                    <div class="timeline-desc">Evaluates all active swing positions against the 5 dynamic exit triggers (Emergency News, Target 2, Target 1, Stop Loss, 10-Day Time Horizon), calculates exact realized returns (±%), archives closed trades, and uploads the <code>Weekly_Swing_Audit_YYYY-MM-DD.xlsx</code> Excel spreadsheet directly to the Portfolio Telegram Bot.</div>
+                </div>
+            </div>
+
+            <!-- 03:50 PM (Tuesdays & Thursdays) -->
+            <div class="timeline-item" data-category="hero-zero">
+                <div class="time-badge" style="color: #ef4444; border-color: #ef4444;">03:50 PM<br><span style="font-size: 10px; font-weight: 500;">(Tue & Thu)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">🏆 Hero-Zero Expiry Final Settlement & Performance Summary</span>
+                        <span class="bot-tag red" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.3);">@Nifty_stage10_paper_bot</span>
+                    </div>
+                    <div class="timeline-desc">Final settlement card calculating peak ROI (2x–5x), strike settlement, and realized profit across all expiry recommendations.</div>
+                </div>
+            </div>
+
+            <!-- 04:00 PM -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge" style="color: #10b981; border-color: #10b981;">04:00 PM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">📈 Intraday Options 4 PM P&L Summary Report</span>
+                        <span class="bot-tag green">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Full daily settlement displaying target reached times, exit timestamps, realized P&L, and strategy accuracy metrics.</div>
+                </div>
+            </div>
+
+            <!-- 04:15 PM (Fridays Only) -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge">04:15 PM<br><span style="font-size: 10px; font-weight: 500;">(Fridays)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">Weekly Options Trade Audit & P&L Report Generation</span>
+                        <span class="bot-tag">@Swingtradeniftybot + Drive</span>
+                    </div>
+                    <div class="timeline-desc">Compiles the comprehensive weekly options trade audit spreadsheet and dispatches it directly to Telegram and Google Drive.</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 2. DEDICATED 5-BOT TELEGRAM HUB -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>🤖 Dedicated 5-Bot Telegram Routing Hub</span>
+        </div>
+    </div>
+
+    <div class="bots-grid">
+
+        <!-- BOT 1 -->
+        <div class="bot-card">
+            <div class="bot-header">
+                <div class="bot-icon shield">🛡️</div>
+                <div class="bot-details">
+                    <h3>Portfolio Peak Guard & Earnings</h3>
+                    <p>@Zerodhaportfoliopro_bot</p>
+                </div>
+            </div>
+            <div style="font-size: 12px; color: #a5b4fc;">
+                <b>Recipient:</b> Siva Kumar (<code>1962486108</code>) &bull; 1 User
+            </div>
+            <div class="tg-mock">
+                🔔 <b>TOMORROW RESULTS: SUZLON</b><br>
+                <div class="tg-divider"></div>
+                💰 <b>LTP:</b> <code>₹38.34</code> | <b>Avg:</b> <code>₹53.23</code> | 🔴 <b>P&L:</b> <b>-28.0%</b> (2,228 Qty)<br>
+                ⚡ <b>RSI:</b> <code>22.0</code> (Oversold Floor) | 🏛️ <b>FII+DII:</b> <code>30.1%</code> (B-Tier)<br>
+                <div class="tg-divider"></div>
+                📊 <b>Analyst Expectations:</b><br>
+                • <b>Consensus:</b> Q2 WTG deliveries ~400+ MW, EBITDA margins ~14.5-16%<br>
+                • <b>Key Trigger:</b> 5.4 GW execution order backlog commissioning<br>
+                <div class="tg-divider"></div>
+                🎯 <b>Action Today (Before 3:30 PM):</b><br>
+                <b>ADD 50% TRANCHE @ ₹36.00</b> (Cuts average from ₹53.23 to ₹44.50)<br>
+                🔮 <b>Tomorrow's Strategy:</b><br>
+                • 📉 <b>Panic Dip GTT:</b> <code>₹33.70 – ₹35.30</code> (-8% to -12%)<br>
+                • 📈 <b>Spike Exit:</b> <code>₹42.95</code> (+12%)
+            </div>
+        </div>
+
+        <!-- BOT 2 -->
+        <div class="bot-card" style="border-color: rgba(99, 102, 241, 0.4);">
+            <div class="bot-header">
+                <div class="bot-icon" style="background: rgba(99, 102, 241, 0.2); border: 1px solid var(--primary);">🎯</div>
+                <div class="bot-details">
+                    <h3>7–10 Day Stock Swing Engine</h3>
+                    <p>@portfolio_bot</p>
+                </div>
+            </div>
+            <div style="font-size: 12px; color: #a5b4fc;">
+                <b>Recipient:</b> Siva Kumar (<code>1962486108</code>) &bull; 1 User
+            </div>
+            <div class="tg-mock">
+                🟢 <b>#1 BUY TRENT (10-DAY SWING)</b><br>
+                <div class="tg-divider"></div>
+                🏷️ <b>Setup:</b> <code>Technical Swing Watch</code><br>
+                ⭐ <b>Conviction:</b> <b>🔥 HIGH CONVICTION</b> (100/100)<br>
+                🏢 <b>Segment:</b> <code>LARGE</code><br>
+                <div class="tg-divider"></div>
+                💰 <b>TARGETS BY TIMEFRAME</b><br>
+                ├─ 🟢 <b>Buy Entry:</b> <code>₹3,017.30</code><br>
+                ├─ 🛑 <b>Stop Loss:</b> <code>₹2,884.03</code> (<b>-4.4%</b>)<br>
+                ├─ 🥇 <b>1-Week Target (5d):</b> <code>₹3,283.84</code> (<b>+8.8%</b>)<br>
+                ├─ 🥈 <b>10-Day Target (10d):</b> <code>₹3,483.75</code> (<b>+15.5%</b>)<br>
+                └─ 🥉 <b>1-Month Target (20d):</b> <code>₹3,750.30</code> (<b>+24.3%</b>)<br>
+                <div class="tg-divider"></div>
+                🔮 <b>Predictive Outlook:</b> <code>🚀 HIGH CONVICTION TAILWIND (Growth Catalysts)</code><br>
+                📰 <b>News:</b> 🟢 Trent Net Profit rises 9% beats estimate, 1000-store milestone<br>
+                <div class="tg-divider"></div>
+                ⏱️ <b>Strategy:</b> <i>Book 50% at 1-Week Target, hold balance for 10-Day target. Managed by Stock Swing V1 Engine.</i>
+            </div>
+        </div>
+
+        <!-- BOT 3 -->
+        <div class="bot-card">
+            <div class="bot-header">
+                <div class="bot-icon lightning">⚡</div>
+                <div class="bot-details">
+                    <h3>Bidirectional Options & News Scanner</h3>
+                    <p>@Swingtradeniftybot</p>
+                </div>
+            </div>
+            <div style="font-size: 12px; color: #38bdf8;">
+                <b>Recipient:</b> Siva Kumar (<code>1962486108</code>) &bull; 1 User
+            </div>
+            <div class="tg-mock">
+                ⚡ <b>INTRADAY OPTIONS (CE & PE) — 4-LAYER SL</b><br>
+                <div class="tg-divider"></div>
+                🟢 <b>1. TATASTEEL 175 CE</b> (Spot: ₹175.46 | 93/100)<br>
+                💰 <b>Entry:</b> <code>₹5.25</code> | 🛑 <b>4-Layer SL:</b> <code>₹4.20</code> (-20%)<br>
+                🎯 <b>T1:</b> <code>₹5.67</code> (+8%) | 🏁 <b>T2:</b> <code>₹6.04</code> (+15%)<br>
+                📦 <b>Lot:</b> 1 Lot (2,750 qty) | <b>Max Risk:</b> ₹2,887.50<br>
+                <div class="tg-divider"></div>
+                🔴 <b>2. NATIONALUM 320 PE</b> (Spot: ₹321.95 | 92/100)<br>
+                💰 <b>Entry:</b> <code>₹9.75</code> | 🛑 <b>4-Layer SL:</b> <code>₹7.80</code> (-20%)<br>
+                🎯 <b>T1:</b> <code>₹10.53</code> (+8%) | 🏁 <b>T2:</b> <code>₹11.21</code> (+15%)<br>
+                📦 <b>Lot:</b> 1 Lot (1,875 qty) | <b>Max Risk:</b> ₹3,656.25<br>
+                <div class="tg-divider"></div>
+                📰 <b>CATALYSTS:</b> 18 Feeds + Sentiment + Multi-Layer Stop Loss
+            </div>
+        </div>
+
+        <!-- BOT 4 -->
+        <div class="bot-card">
+            <div class="bot-header">
+                <div class="bot-icon chart">📈</div>
+                <div class="bot-details">
+                    <h3>NIFTY V14.9 Paper Engine</h3>
+                    <p>@Jinna_Nifty_BOT</p>
+                </div>
+            </div>
+            <div style="font-size: 12px; color: #6ee7b7;">
+                <b>Recipients:</b> 2 Users (Siva Kumar + Sravan Reddy)
+            </div>
+            <div class="tg-mock">
+                📈 <b>NIFTY V14.9 PAPER TRADING SIGNAL</b><br>
+                <div class="tg-divider"></div>
+                🎯 <b>Direction:</b> 🟢 LONG ATM CE<br>
+                📊 <b>Nifty Spot:</b> <code>25,840.50</code> | <b>Strike:</b> <code>25,850 CE</code><br>
+                🛑 <b>Stop Loss:</b> <code>₹120.00</code> | <b>Target:</b> <code>₹185.00</code><br>
+                <div class="tg-divider"></div>
+                👥 <i>Broadcast active for 2 subscribed trading terminals.</i>
+            </div>
+        </div>
+
+        <!-- BOT 5 -->
+        <div class="bot-card" style="border-color: rgba(239, 68, 68, 0.4);">
+            <div class="bot-header">
+                <div class="bot-icon" style="background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger);">🔥</div>
+                <div class="bot-details">
+                    <h3>Hero-Zero Weekly Expiry Engine</h3>
+                    <p>@Nifty_stage10_paper_bot</p>
+                </div>
+            </div>
+            <div style="font-size: 12px; color: #f87171;">
+                <b>Routing:</b> Telegram Group Chat <b>Nifty v14.9 Paper Trading</b> (<code>-1004389382181</code>)
+            </div>
+            <div class="tg-mock">
+                🔥 <b>STAGE 10 — NIFTY HERO-ZERO EXPIRY</b> 🔥<br>
+                <div class="tg-divider"></div>
+                📅 <b>Expiry:</b> <code>14-Oct-2026 (Tuesday)</code><br>
+                🕒 <b>Session:</b> <code>03:05 PM Peak Volatility Window IST</code><br>
+                ⚡ <b>Payoff:</b> <code>Asymmetric 2x - 5x Payoff</code><br>
+                🤖 <b>Bot:</b> <code>@Nifty_stage10_paper_bot</code><br>
+                <div class="tg-divider"></div>
+                🏛️ 🟢 <b>#1 BUY NIFTY 24900 CE (HERO-ZERO)</b><br>
+                <div class="tg-divider"></div>
+                ⭐ <b>Quality Score:</b> <code>88/100</code><br>
+                🚀 <b>Catalyst:</b> <code>BULLISH MOMENTUM SURGE 🚀</code><br>
+                <br>
+                💰 <b>HERO-ZERO TRADE LEVELS</b><br>
+                ├─ 📊 <b>Spot Price:</b> <code>₹24,800.00</code> (ATM 24900)<br>
+                ├─ 🟢 <b>Entry Price:</b> <code>₹20.00</code> (Low Premium)<br>
+                ├─ 🛑 <b>Risk SL:</b> <code>₹10.00</code> (<b>-10.00 pts / 50% Cap</b>)<br>
+                ├─ 🥇 <b>Target 1:</b> <code>₹40.00</code> (<b>+20.00 pts / +100%</b>)<br>
+                └─ 🚀 <b>Target 2:</b> <code>₹80.00</code> (<b>+60.00 pts / +300%</b>)<br>
+                <br>
+                📦 <b>POSITION SIZING & RISK</b><br>
+                ├─ 🏷️ <b>Lots:</b> <code>2 lots (25/lot = 50 qty)</code><br>
+                ├─ 💵 <b>Capital:</b> <code>₹1,000.00</code><br>
+                └─ 🛡️ <b>Max Risk:</b> <code>₹500.00</code><br>
+                <div class="tg-divider"></div>
+                🔥 <b>V14.7 STRATEGY:</b> <i>Risk small capital for explosive 2x-5x expiry payoff. Book 50% @ T1!</i>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 3. 7-TO-10 DAY STOCK SWING ARCHITECTURE & ACTIVE POSITIONS MATRIX -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>🎯 7-to-10 Day Stock Swing Engine & Predictive Crash Shield</span>
+        </div>
+    </div>
+
+    <div class="pillars-grid">
+        <div class="pillar-card p-blue">
+            <h4>🌐 1. Full NSE Universe & Liquidity Filtering</h4>
+            <p>Screens all 2,391 NSE equity symbols across Large, Mid, and Small Cap segments. Enforces a strict <b>₹1 Crore minimum daily turnover</b> and price filters (₹10–₹50,000) to eliminate illiquid penny stock manipulation.</p>
+            <div class="pillar-stocks">2,391 Universe ➔ Top 225 Quote Liquid ➔ 100 High Volume</div>
+        </div>
+        <div class="pillar-card p-red">
+            <h4>🛡️ 2. News-Based Predictive Crash Shield</h4>
+            <p>Protects capital from non-technical 10%–50% catastrophic drops. Automatically rejects any stock with active regulatory probes (SEBI, ED, CBI, RBI), auditor/CFO/CEO resignations, debt defaults/NCLT, promoter pledge liquidations, or US-FDA import alerts.</p>
+            <div class="pillar-stocks">Automated Forensic Hazard & Red Flag Scanner</div>
+        </div>
+        <div class="pillar-card p-green">
+            <h4>📅 3. 7–10 Day Quarterly Earnings Blackout</h4>
+            <p>Disqualifies any candidate with scheduled quarterly corporate financial results inside the active swing holding window to prevent binary post-earnings gap-down drawdowns.</p>
+            <div class="pillar-stocks">Zero Earnings Gambling Blackout Guard</div>
+        </div>
+        <div class="pillar-card p-blue">
+            <h4>⏱️ 4. 5-Condition Dynamic Exit Engine & Audit</h4>
+            <p>Evaluates active trades against 5 dynamic triggers: Emergency News Exit, Target 2 (+10%+), Target 1 (+5.5%+), Stop Loss (-3.5%), and 10-Day Time Horizon. Dispatches weekly return reports and Excel spreadsheets (<code>Weekly_Swing_Audit_*.xlsx</code>) to @portfolio_bot.</p>
+            <div class="pillar-stocks">Automated P&L Returns & Win-Rate Excel Audit</div>
+        </div>
+    </div>
+
+    <!-- ACTIVE SWING POSITIONS MATRIX -->
+    <div class="table-container" style="margin-bottom: 32px;">
+        <div class="table-header">
+            <div class="table-title">🎯 Live Active Swing Trades Matrix (11 Active Positions Tracking on VM)</div>
+            <div class="table-meta">Cycle Start: 01-Nov-2026 &bull; Target Timeframe: 7 to 10 Trading Days &bull; Managed by <code>database/active_swing_trades.json</code></div>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="holdings-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Stock Symbol</th>
+                        <th>Segment</th>
+                        <th>Strategy Setup</th>
+                        <th>Buy Entry</th>
+                        <th>Stop Loss</th>
+                        <th>🥇 1-Week Target</th>
+                        <th>🥈 10-Day Target</th>
+                        <th>🥉 1-Month Target</th>
+                        <th>Conviction</th>
+                        <th>Predictive Outlook</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td class="sym-cell">DIVISLAB</td>
+                        <td><span class="badge badge-blue">LARGE</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹9,780.00</b></td>
+                        <td><span class="pnl-neg">₹9,410.30 (-3.8%)</span></td>
+                        <td><span class="pnl-pos">₹10,519.40 (+7.6%)</span></td>
+                        <td><span class="pnl-pos">₹11,073.95 (+13.2%)</span></td>
+                        <td><span class="pnl-pos">₹11,813.34 (+20.8%)</span></td>
+                        <td><span class="badge badge-green">100/100</span></td>
+                        <td>🟢 Clean Structure (No Red Flags)</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td class="sym-cell">TRENT</td>
+                        <td><span class="badge badge-blue">LARGE</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹3,017.30</b></td>
+                        <td><span class="pnl-neg">₹2,884.03 (-4.4%)</span></td>
+                        <td><span class="pnl-pos">₹3,283.84 (+8.8%)</span></td>
+                        <td><span class="pnl-pos">₹3,483.75 (+15.5%)</span></td>
+                        <td><span class="pnl-pos">₹3,750.30 (+24.3%)</span></td>
+                        <td><span class="badge badge-green">100/100</span></td>
+                        <td>🚀 High Conviction Tailwind (Q2 Beat, 1000 Stores)</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td class="sym-cell">COFORGE</td>
+                        <td><span class="badge badge-blue">MID</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹2,045.00</b></td>
+                        <td><span class="pnl-neg">₹1,936.98 (-5.3%)</span></td>
+                        <td><span class="pnl-pos">₹2,261.04 (+10.6%)</span></td>
+                        <td><span class="pnl-pos">₹2,423.07 (+18.5%)</span></td>
+                        <td><span class="pnl-pos">₹2,639.11 (+29.1%)</span></td>
+                        <td><span class="badge badge-green">100/100</span></td>
+                        <td>🟢 Q2 Profit +13%, Margin Expansion</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td class="sym-cell">BHARTIARTL</td>
+                        <td><span class="badge badge-blue">LARGE</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹1,973.70</b></td>
+                        <td><span class="pnl-neg">₹1,908.44 (-3.3%)</span></td>
+                        <td><span class="pnl-pos">₹2,104.22 (+6.6%)</span></td>
+                        <td><span class="pnl-pos">₹2,202.11 (+11.6%)</span></td>
+                        <td><span class="pnl-pos">₹2,334.24 (+18.3%)</span></td>
+                        <td><span class="badge badge-blue">80/100</span></td>
+                        <td>🚀 High Conviction Tailwind (ARPU Expansion)</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td class="sym-cell">KOTAKBANK</td>
+                        <td><span class="badge badge-blue">LARGE</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹461.60</b></td>
+                        <td><span class="pnl-neg">₹446.78 (-3.2%)</span></td>
+                        <td><span class="pnl-pos">₹491.24 (+6.4%)</span></td>
+                        <td><span class="pnl-pos">₹513.48 (+11.2%)</span></td>
+                        <td><span class="pnl-pos">₹542.45 (+17.5%)</span></td>
+                        <td><span class="badge badge-blue">80/100</span></td>
+                        <td>🟢 Banking Credit Growth Momentum</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td class="sym-cell">ADANIPORTS</td>
+                        <td><span class="badge badge-blue">LARGE</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹1,850.00</b></td>
+                        <td><span class="pnl-neg">₹1,773.32 (-4.1%)</span></td>
+                        <td><span class="pnl-pos">₹2,003.35 (+8.3%)</span></td>
+                        <td><span class="pnl-pos">₹2,118.37 (+14.5%)</span></td>
+                        <td><span class="pnl-pos">₹2,271.74 (+22.8%)</span></td>
+                        <td><span class="badge badge-blue">80/100</span></td>
+                        <td>🟢 Monthly Cargo Volume Surge</td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td class="sym-cell">PNB</td>
+                        <td><span class="badge badge-blue">LARGE</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹122.85</b></td>
+                        <td><span class="pnl-neg">₹118.23 (-3.8%)</span></td>
+                        <td><span class="pnl-pos">₹132.09 (+7.5%)</span></td>
+                        <td><span class="pnl-pos">₹139.02 (+13.2%)</span></td>
+                        <td><span class="pnl-pos">₹148.26 (+20.7%)</span></td>
+                        <td><span class="badge badge-blue">80/100</span></td>
+                        <td>🟢 PSU Bank Asset Quality Upgrade</td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td class="sym-cell">INDHOTEL</td>
+                        <td><span class="badge badge-blue">LARGE</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹811.65</b></td>
+                        <td><span class="pnl-neg">₹781.15 (-3.8%)</span></td>
+                        <td><span class="pnl-pos">₹872.65 (+7.5%)</span></td>
+                        <td><span class="pnl-pos">₹918.40 (+13.2%)</span></td>
+                        <td><span class="pnl-pos">₹979.40 (+20.7%)</span></td>
+                        <td><span class="badge badge-blue">80/100</span></td>
+                        <td>🚀 Festive & Wedding Season RevPAR Demand</td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td class="sym-cell">LAURUSLABS</td>
+                        <td><span class="badge badge-blue">MID</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹2,405.50</b></td>
+                        <td><span class="pnl-neg">₹2,297.93 (-4.5%)</span></td>
+                        <td><span class="pnl-pos">₹2,620.65 (+8.9%)</span></td>
+                        <td><span class="pnl-pos">₹2,782.01 (+15.7%)</span></td>
+                        <td><span class="pnl-pos">₹2,997.16 (+24.6%)</span></td>
+                        <td><span class="badge badge-blue">80/100</span></td>
+                        <td>🟢 Q2 Net Profit Jumps 126%, CDMO Tailwind</td>
+                    </tr>
+                    <tr>
+                        <td>10</td>
+                        <td class="sym-cell">PERSISTENT</td>
+                        <td><span class="badge badge-blue">MID</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹6,048.00</b></td>
+                        <td><span class="pnl-neg">₹5,763.35 (-4.7%)</span></td>
+                        <td><span class="pnl-pos">₹6,617.30 (+9.4%)</span></td>
+                        <td><span class="pnl-pos">₹7,044.27 (+16.5%)</span></td>
+                        <td><span class="pnl-pos">₹7,613.56 (+25.9%)</span></td>
+                        <td><span class="badge badge-blue">80/100</span></td>
+                        <td>🟢 Strong Digital Engineering Deal Pipeline</td>
+                    </tr>
+                    <tr>
+                        <td>11</td>
+                        <td class="sym-cell">SONACOMS</td>
+                        <td><span class="badge badge-blue">MID</span></td>
+                        <td>Technical Swing Watch</td>
+                        <td><b>₹890.50</b></td>
+                        <td><span class="pnl-neg">₹846.49 (-4.9%)</span></td>
+                        <td><span class="pnl-pos">₹978.52 (+9.9%)</span></td>
+                        <td><span class="pnl-pos">₹1,044.54 (+17.3%)</span></td>
+                        <td><span class="pnl-pos">₹1,132.56 (+27.2%)</span></td>
+                        <td><span class="badge badge-blue">80/100</span></td>
+                        <td>🟢 EV Driveline Traction & Order Wins</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 4. PORTFOLIO TURNAROUND BLUEPRINT -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>🚀 4-Pillar Portfolio Turnaround Blueprint (Turn All 26 Green)</span>
+        </div>
+    </div>
+
+    <div class="pillars-grid">
+        <div class="pillar-card p-red">
+            <h4>🔴 Pillar 1: Harvest Peak Sells</h4>
+            <p>Lock in peak profits on overbought stocks hitting major resistance or breaking below 20-EMA. Set GTT limit orders to buy back only on -8% to -14% institutional panic dips.</p>
+            <div class="pillar-stocks">BAJAJHFL, COCHINSHIP, SUZLON</div>
+        </div>
+        <div class="pillar-card p-blue">
+            <h4>🔵 Pillar 2: 1-Tranche Bottom Averaging</h4>
+            <p>Deploy a single 50% capital tranche on deep oversold RSI (<35) high-institutional blue chips. Cuts required recovery rally by 50% (e.g. from +20% to +8%).</p>
+            <div class="pillar-stocks">IRB, ASHOKLEY, IEX, SUZLON, COCHINSHIP, ECOSMOBLTY, EPACK</div>
+        </div>
+        <div class="pillar-card p-green">
+            <h4>🟢 Pillar 3: Ride Bullish Momentum</h4>
+            <p>Allow institutional accumulation leaders to ride trends above 20-EMA & 50-EMA with ATR-based trailing stops. Do not exit early before quarterly earnings beats.</p>
+            <div class="pillar-stocks">COALINDIA, ELECTCAST, LODHA, IOC, PCBL, NTPCGREEN, HAPPSTMNDS, DREAMFOLKS</div>
+        </div>
+        <div class="pillar-card p-amber">
+            <h4>⚪ Pillar 4: Freeze Penny Stocks & AMO</h4>
+            <p><b>Strict Rule: ZERO capital averaging</b> in penny & micro-cap holdings. Use Pre-Market After-Market Orders (AMO) at 08:50 AM IST on 5% upper circuit spikes.</p>
+            <div class="pillar-stocks">ALOKINDS, SALASAR, MADHAVIPL, SAMPRE, MISHTANN, GTLINFRA, AKSHAR, MAHACORP, STANCAP</div>
+        </div>
+    </div>
+
+    <!-- 4. LIVE 26 DEMAT HOLDINGS AUDIT TABLE -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>📊 Live Zerodha Demat Holdings Matrix (All 26 Stocks — Live Kite Ticks)</span>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="search-box">
+            <input type="text" class="search-input" id="table-search" placeholder="🔍 Search stock (e.g. IRB, SUZLON, IEX, COALINDIA, ASHOKLEY)..." onkeyup="searchHoldings()">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="filterTable('all', this)">All (26)</button>
+                <button class="tab-btn" onclick="filterTable('average', this)">🔵 Averaging Floors</button>
+                <button class="tab-btn" onclick="filterTable('hold', this)">🟢 Safe Holds</button>
+                <button class="tab-btn" onclick="filterTable('sell', this)">🔴 Peak Sells</button>
+                <button class="tab-btn" onclick="filterTable('freeze', this)">⚪ Penny Freeze</button>
+            </div>
+        </div>
+
+        <table id="holdings-table">
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Qty</th>
+                    <th>Avg Price</th>
+                    <th>LTP (₹)</th>
+                    <th>P&L %</th>
+                    <th>20-EMA</th>
+                    <th>RSI (14)</th>
+                    <th>FII+DII % (Tier)</th>
+                    <th>Institutional Flow & News Catalyst</th>
+                    <th>Strategic Directive</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 1. IRB -->
+                <tr data-type="average">
+                    <td class="sym-cell">IRB</td>
+                    <td>3,060</td>
+                    <td>₹29.64</td>
+                    <td><b>₹17.44</b></td>
+                    <td><span class="pnl-neg">-41.2%</span></td>
+                    <td>₹18.00</td>
+                    <td>33.0</td>
+                    <td>48.5% (A-Tier)</td>
+                    <td>🏛️ ₹2,744 Cr Acquisition of Ganga Expressway; GIC & Cintra Institutional Base</td>
+                    <td><span class="badge-status badge-avg">🔵 1-TRANCHE AVG @ ₹16.50 (CUT AVG TO ₹23.00)</span></td>
+                </tr>
+                <!-- 2. COCHINSHIP -->
+                <tr data-type="average">
+                    <td class="sym-cell">COCHINSHIP</td>
+                    <td>70</td>
+                    <td>₹1,533.96</td>
+                    <td><b>₹1,255.10</b></td>
+                    <td><span class="pnl-neg">-18.2%</span></td>
+                    <td>₹1,356.47</td>
+                    <td>39.6</td>
+                    <td>22.8% (A-Tier)</td>
+                    <td>Defense PSU & Ship Repair Order Book (+1.4% DII Inflow)</td>
+                    <td><span class="badge-status badge-avg">🔵 1-TRANCHE AVG @ ₹1,180 (CUT AVG TO ₹1,350)</span></td>
+                </tr>
+                <!-- 3. SUZLON -->
+                <tr data-type="average">
+                    <td class="sym-cell">SUZLON</td>
+                    <td>2,228</td>
+                    <td>₹53.23</td>
+                    <td><b>₹38.34</b></td>
+                    <td><span class="pnl-neg">-28.0%</span></td>
+                    <td>₹41.43</td>
+                    <td>22.0</td>
+                    <td>30.1% (B-Tier)</td>
+                    <td>Deep Oversold RSI (22.0); 5.4 GW Wind Order Book Backlog</td>
+                    <td><span class="badge-status badge-avg">🔵 1-TRANCHE AVG @ ₹36.00 (CUT AVG TO ₹44.50)</span></td>
+                </tr>
+                <!-- 4. IEX -->
+                <tr data-type="average">
+                    <td class="sym-cell">IEX</td>
+                    <td>630</td>
+                    <td>₹174.55</td>
+                    <td><b>₹105.85</b></td>
+                    <td><span class="pnl-neg">-39.4%</span></td>
+                    <td>₹110.97</td>
+                    <td>35.3</td>
+                    <td>36.4% (A-Tier)</td>
+                    <td>🏛️ Bernstein Target ₹180; Market Coupling Regulatory Concerns Eased</td>
+                    <td><span class="badge-status badge-avg">🔵 1-TRANCHE AVG @ ₹102.00 (CUT AVG TO ₹138.00)</span></td>
+                </tr>
+                <!-- 5. ASHOKLEY -->
+                <tr data-type="average">
+                    <td class="sym-cell">ASHOKLEY</td>
+                    <td>318</td>
+                    <td>₹155.98</td>
+                    <td><b>₹149.35</b></td>
+                    <td><span class="pnl-neg">-4.2%</span></td>
+                    <td>₹158.11</td>
+                    <td>39.9</td>
+                    <td>38.2% (A-Tier)</td>
+                    <td>Commercial Vehicle Cycle Turnaround (+2.1% DII Value Accumulation)</td>
+                    <td><span class="badge-status badge-avg">🔵 1-TRANCHE AVG @ ₹148.00 (CUT RALLY TO +2.2%)</span></td>
+                </tr>
+                <!-- 6. COALINDIA -->
+                <tr data-type="hold">
+                    <td class="sym-cell">COALINDIA</td>
+                    <td>13</td>
+                    <td>₹308.91</td>
+                    <td><b>₹413.95</b></td>
+                    <td><span class="pnl-pos">+34.0%</span></td>
+                    <td>₹419.54</td>
+                    <td>44.6</td>
+                    <td>32.5% (A-Tier)</td>
+                    <td>High Dividend Yield Floor; 6-8% Yield Anchor & Monopoly Cash Flow</td>
+                    <td><span class="badge-status badge-hold">🟢 SAFE HOLD (DIVIDEND HARVEST & RIDE)</span></td>
+                </tr>
+                <!-- 7. PCBL -->
+                <tr data-type="hold">
+                    <td class="sym-cell">PCBL</td>
+                    <td>126</td>
+                    <td>₹286.78</td>
+                    <td><b>₹326.90</b></td>
+                    <td><span class="pnl-pos">+14.0%</span></td>
+                    <td>₹329.16</td>
+                    <td>57.3</td>
+                    <td>18.2% (B+-Tier)</td>
+                    <td>Specialty Chemicals Demand & Aquapharm Acquisition Synergies</td>
+                    <td><span class="badge-status badge-hold">🟢 SAFE HOLD (PROFIT TRAIL SL ₹312)</span></td>
+                </tr>
+                <!-- 8. IOC -->
+                <tr data-type="hold">
+                    <td class="sym-cell">IOC</td>
+                    <td>200</td>
+                    <td>₹124.15</td>
+                    <td><b>₹130.00</b></td>
+                    <td><span class="pnl-pos">+4.7%</span></td>
+                    <td>₹134.14</td>
+                    <td>41.0</td>
+                    <td>21.3% (A-Tier)</td>
+                    <td>High Dividend Yield & Refining Margin Stability</td>
+                    <td><span class="badge-status badge-hold">🟢 SAFE HOLD (DIVIDEND HARVEST)</span></td>
+                </tr>
+                <!-- 9. LODHA -->
+                <tr data-type="hold">
+                    <td class="sym-cell">LODHA</td>
+                    <td>72</td>
+                    <td>₹1,333.70</td>
+                    <td><b>₹1,109.05</b></td>
+                    <td><span class="pnl-neg">-16.8%</span></td>
+                    <td>₹1,142.60</td>
+                    <td>54.7</td>
+                    <td>43.6% (A+-Tier)</td>
+                    <td>Strong Pre-Sales (+3.4% DII Inflow); Premium Housing Demand</td>
+                    <td><span class="badge-status badge-hold">🟢 SAFE HOLD / ADD (TRAIL SL ₹1,045)</span></td>
+                </tr>
+                <!-- 10. ELECTCAST -->
+                <tr data-type="hold">
+                    <td class="sym-cell">ELECTCAST</td>
+                    <td>560</td>
+                    <td>₹147.56</td>
+                    <td><b>₹78.73</b></td>
+                    <td><span class="pnl-neg">-46.6%</span></td>
+                    <td>₹75.86</td>
+                    <td>62.4</td>
+                    <td>19.4% (A-Tier)</td>
+                    <td>Ductile Iron Pipe Water Infrastructure Leader (+0.8% DII Inflow)</td>
+                    <td><span class="badge-status badge-hold">🟢 SAFE HOLD / ACCUMULATE (ABOVE 20-EMA)</span></td>
+                </tr>
+                <!-- 11. BAJAJHFL -->
+                <tr data-type="sell">
+                    <td class="sym-cell">BAJAJHFL</td>
+                    <td>100</td>
+                    <td>₹108.95</td>
+                    <td><b>₹83.99</b></td>
+                    <td><span class="pnl-neg">-22.9%</span></td>
+                    <td>₹83.23</td>
+                    <td>55.4</td>
+                    <td>8.5% (B-Tier)</td>
+                    <td>🏛️ ₹2,439 Cr NCD Allotment; Housing Loan Growth</td>
+                    <td><span class="badge-status badge-sell">🔴 SELL 50% ON BOUNCE @ ₹88 (GTT BUY ₹74)</span></td>
+                </tr>
+                <!-- 12. IMAGICAA -->
+                <tr data-type="filing">
+                    <td class="sym-cell">IMAGICAA</td>
+                    <td>680</td>
+                    <td>₹81.80</td>
+                    <td><b>₹48.72</b></td>
+                    <td><span class="pnl-neg">-40.4%</span></td>
+                    <td>₹51.27</td>
+                    <td>33.3</td>
+                    <td>5.8% (C+-Tier)</td>
+                    <td>🏛️ Binding MoU with Juniper Hotels (₹248 Cr Novotel Slump Sale)</td>
+                    <td><span class="badge-status badge-filing">🏛️ REGULATORY FILING (BUY DIP @ ₹42–45)</span></td>
+                </tr>
+                <!-- 13. ECOSMOBLTY -->
+                <tr data-type="average">
+                    <td class="sym-cell">ECOSMOBLTY</td>
+                    <td>252</td>
+                    <td>₹177.82</td>
+                    <td><b>₹108.24</b></td>
+                    <td><span class="pnl-neg">-39.1%</span></td>
+                    <td>₹108.70</td>
+                    <td>54.6</td>
+                    <td>14.5% (B-Tier)</td>
+                    <td>🚀 Smart-Money Coiling; Corporate Mobility Base Building</td>
+                    <td><span class="badge-status badge-avg">🔵 1-TRANCHE AVG @ ₹102 (CUT AVG TO ₹140)</span></td>
+                </tr>
+                <!-- 14. EPACK -->
+                <tr data-type="average">
+                    <td class="sym-cell">EPACK</td>
+                    <td>100</td>
+                    <td>₹347.25</td>
+                    <td><b>₹171.84</b></td>
+                    <td><span class="pnl-neg">-50.5%</span></td>
+                    <td>₹179.99</td>
+                    <td>40.8</td>
+                    <td>9.8% (B-Tier)</td>
+                    <td>EMS Manufacturer Base; Room AC Production Ramping</td>
+                    <td><span class="badge-status badge-avg">🔵 1-TRANCHE AVG @ ₹162 (CUT AVG TO ₹254)</span></td>
+                </tr>
+                <!-- 15. NTPCGREEN -->
+                <tr data-type="hold">
+                    <td class="sym-cell">NTPCGREEN</td>
+                    <td>130</td>
+                    <td>₹132.49</td>
+                    <td><b>₹88.51</b></td>
+                    <td><span class="pnl-neg">-33.2%</span></td>
+                    <td>₹90.74</td>
+                    <td>53.0</td>
+                    <td>15.2% (B+-Tier)</td>
+                    <td>PSU Green Energy Growth towards 60 GW 2032 Target</td>
+                    <td><span class="badge-status badge-hold">🟢 SAFE HOLD / ACCUMULATE (WAIT FOR RESULTS)</span></td>
+                </tr>
+                <!-- 16. HAPPSTMNDS -->
+                <tr data-type="hold">
+                    <td class="sym-cell">HAPPSTMNDS</td>
+                    <td>70</td>
+                    <td>₹778.09</td>
+                    <td><b>₹304.60</b></td>
+                    <td><span class="pnl-neg">-60.9%</span></td>
+                    <td>₹322.80</td>
+                    <td>23.7</td>
+                    <td>12.8% (B-Tier)</td>
+                    <td>Oversold RSI (23.7); Midcap IT Generative AI Base</td>
+                    <td><span class="badge-status badge-hold">🟢 HOLD FOR Q2 RESULTS / WATCH VALUE FLOOR</span></td>
+                </tr>
+                <!-- 17. DREAMFOLKS -->
+                <tr data-type="hold">
+                    <td class="sym-cell">DREAMFOLKS</td>
+                    <td>208</td>
+                    <td>₹185.34</td>
+                    <td><b>₹60.13</b></td>
+                    <td><span class="pnl-neg">-67.6%</span></td>
+                    <td>₹63.22</td>
+                    <td>16.4</td>
+                    <td>11.2% (C+-Tier)</td>
+                    <td>Deep Oversold RSI (16.4); Airport Lounge Access Base</td>
+                    <td><span class="badge-status badge-hold">🟢 WATCH BASE BUILDING @ ₹58–62</span></td>
+                </tr>
+                <!-- 18. ALOKINDS -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">ALOKINDS</td>
+                    <td>501</td>
+                    <td>₹28.27</td>
+                    <td><b>₹8.30</b></td>
+                    <td><span class="pnl-neg">-70.6%</span></td>
+                    <td>₹7.73</td>
+                    <td>63.8</td>
+                    <td>2.2% (C-Tier)</td>
+                    <td>⚡ +20% Upper Circuit Rally; High RVOL (2.8x)</td>
+                    <td><span class="badge-status badge-freeze">⚪ FREEZE AVG / SELL 50% ON CIRCUIT SPIKE</span></td>
+                </tr>
+                <!-- 19. SALASAR -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">SALASAR</td>
+                    <td>800</td>
+                    <td>₹17.41</td>
+                    <td><b>₹4.18</b></td>
+                    <td><span class="pnl-neg">-76.0%</span></td>
+                    <td>₹4.65</td>
+                    <td>23.2</td>
+                    <td>1.4% (C--Tier)</td>
+                    <td>Low Institutions; Solar & Telecom EPC Business</td>
+                    <td><span class="badge-status badge-freeze">⚪ FREEZE AVG (AMO SELL ON 5% CIRCUIT BOUNCE)</span></td>
+                </tr>
+                <!-- 20. MADHAVIPL -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">MADHAVIPL</td>
+                    <td>1,317</td>
+                    <td>₹17.50</td>
+                    <td><b>₹7.45</b></td>
+                    <td><span class="pnl-neg">-57.4%</span></td>
+                    <td>₹7.52</td>
+                    <td>38.5</td>
+                    <td>0.5% (D-Tier)</td>
+                    <td>Micro-Cap Infrastructure EPC; Low Float</td>
+                    <td><span class="badge-status badge-freeze">⚪ FREEZE AVG (PRE-MARKET AMO EXIT)</span></td>
+                </tr>
+                <!-- 21. SAMPRE -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">SAMPRE</td>
+                    <td>400</td>
+                    <td>₹20.47</td>
+                    <td><b>₹6.00</b></td>
+                    <td><span class="pnl-neg">-70.7%</span></td>
+                    <td>₹6.03</td>
+                    <td>50.8</td>
+                    <td>0.3% (D-Tier)</td>
+                    <td>Micro-Cap Nutraceuticals; Low Volume Float</td>
+                    <td><span class="badge-status badge-freeze">⚪ FREEZE AVG (AMO LIMIT EXIT)</span></td>
+                </tr>
+                <!-- 22. MISHTANN -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">MISHTANN</td>
+                    <td>250</td>
+                    <td>₹7.28</td>
+                    <td><b>₹3.19</b></td>
+                    <td><span class="pnl-neg">-56.2%</span></td>
+                    <td>₹3.19</td>
+                    <td>50.0</td>
+                    <td>1.1% (D-Tier)</td>
+                    <td>Micro-Cap FMCG Rice & Agro Processing</td>
+                    <td><span class="badge-status badge-freeze">⚪ FREEZE AVG (AMO LIMIT EXIT)</span></td>
+                </tr>
+                <!-- 23. GTLINFRA -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">GTLINFRA</td>
+                    <td>1,300</td>
+                    <td>₹3.65</td>
+                    <td><b>₹1.08</b></td>
+                    <td><span class="pnl-neg">-70.4%</span></td>
+                    <td>₹1.11</td>
+                    <td>43.5</td>
+                    <td>0.8% (D-Tier)</td>
+                    <td>Penny Stock; High Circuit Lock Risk</td>
+                    <td><span class="badge-status badge-freeze">⚪ NO CAPITAL (PRE-MARKET AMO EXIT)</span></td>
+                </tr>
+                <!-- 24. AKSHAR -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">AKSHAR</td>
+                    <td>1,001</td>
+                    <td>₹3.85</td>
+                    <td><b>₹0.43</b></td>
+                    <td><span class="pnl-neg">-88.8%</span></td>
+                    <td>₹0.41</td>
+                    <td>57.1</td>
+                    <td>0.2% (D-Tier)</td>
+                    <td>Micro-Cap Penny; Zero Institutional Flow</td>
+                    <td><span class="badge-status badge-freeze">⚪ NO CAPITAL (PRE-MARKET AMO EXIT)</span></td>
+                </tr>
+                <!-- 25. MAHACORP -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">MAHACORP</td>
+                    <td>1,000</td>
+                    <td>₹1.72</td>
+                    <td><b>₹0.30</b></td>
+                    <td><span class="pnl-neg">-82.6%</span></td>
+                    <td>₹0.30</td>
+                    <td>46.2</td>
+                    <td>0.1% (D-Tier)</td>
+                    <td>Micro-Cap Penny; Illiquid Order Book</td>
+                    <td><span class="badge-status badge-freeze">⚪ NO CAPITAL (AMO LIMIT EXIT)</span></td>
+                </tr>
+                <!-- 26. STANCAP -->
+                <tr data-type="freeze">
+                    <td class="sym-cell">STANCAP</td>
+                    <td>3,002</td>
+                    <td>₹2.67</td>
+                    <td><b>₹0.31</b></td>
+                    <td><span class="pnl-neg">-88.4%</span></td>
+                    <td>₹0.32</td>
+                    <td>42.9</td>
+                    <td>0.1% (D-Tier)</td>
+                    <td>Micro-Cap Penny; Low Float</td>
+                    <td><span class="badge-status badge-freeze">⚪ NO CAPITAL (AMO LIMIT EXIT)</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 5. DEFENSIVE COUNTERMEASURES -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>🛡️ Real-World Trap Defenses & Negative Scenario Safeguards</span>
+        </div>
+    </div>
+
+    <div class="defenses-grid">
+        <div class="defense-card">
+            <h4>⚠️ 1. Intraday Whipsaw Filter</h4>
+            <p>Temporary morning dips below 20-EMA are marked <b>Provisional</b>. Hard exits only execute between 03:15–03:25 PM based on finalized daily closing candles.</p>
+        </div>
+        <div class="defense-card">
+            <h4>⚠️ 2. 'Sell-on-News' Protection</h4>
+            <p>If a stock reports strong earnings but RSI > 68 (overbought), the engine advises <b>50% Peak Profit Exit</b> to prevent retail liquidity traps.</p>
+        </div>
+        <div class="defense-card">
+            <h4>⚠️ 3. Penny Stock Circuit Defense</h4>
+            <p>Stocks trading below ₹15 are flagged for <b>Lower Circuit Risk</b>, automatically advising Pre-Market AMO limit exits rather than failed intraday market orders.</p>
+        </div>
+        <div class="defense-card">
+            <h4>⚠️ 4. Averaging Capital Cap</h4>
+            <p>Averaging is strictly restricted to <b>1 Tranche</b> and prioritized for Top-Tier institutional blue chips (Cochin Shipyard, Ashok Leyland, Suzlon, IEX, IRB) to protect liquidity.</p>
+        </div>
+    </div>
+
+    <!-- 7. MASTER COMMAND REFERENCE -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>💻 Master Command Reference (Oracle VM & Local)</span>
+        </div>
+    </div>
+
+    <div class="code-box">
+        <span><b>🎯 7–10 Day Swing Entry Scan (Mondays 9:30 AM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 run_swing_trade_system.py</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 run_swing_trade_system.py')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>🔔 7–10 Day Swing Exit Monitor & Sell Triggers:</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 run_swing_trade_system.py --monitor-exits</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 run_swing_trade_system.py --monitor-exits')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>📊 7–10 Day Swing Weekly Exit & Performance Audit (Fridays 3:15 PM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 run_swing_trade_system.py --close-and-audit</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 run_swing_trade_system.py --close-and-audit')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>Tomorrow Results & Analyst Analysis:</b> python portfolio_peak_exit_guard.py --use-demat --tomorrow-results</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('python portfolio_peak_exit_guard.py --use-demat --tomorrow-results')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>Portfolio Audit & Telegram Dispatch:</b> python portfolio_peak_exit_guard.py --use-demat --send-telegram --force-all</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('python portfolio_peak_exit_guard.py --use-demat --send-telegram --force-all')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>Hourly Intraday Options Scan (VM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 60</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 60')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>Continuous Sentinel on VM (09:15–03:30 IST):</b> /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD/run_continuous_monitor.sh</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('/home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD/run_continuous_monitor.sh')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>🛢️ MCX Crude Oil Momentum Breakout Scan (10:00 AM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_crude_swing_scan.py</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_crude_swing_scan.py')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>Daily Pre-Market System Maintenance (06:00 AM):</b> /home/ubuntu/NiftyScanner/daily_system_maintenance.sh</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('/home/ubuntu/NiftyScanner/daily_system_maintenance.sh')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>NIFTY Hero-Zero Expiry Scan (Tuesdays @ 03:05 PM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>BSE SENSEX Hero-Zero Expiry Scan (Thursdays @ 03:05 PM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py')">Copy</button>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        NiftyScanner Autonomous Trading & Portfolio Intelligence Platform &bull; Built with Claude Code &bull; Oracle Cloud VM: <code>140.245.195.112</code>
+    </footer>
+
+</div>
+
+<script>
+    // Live Clock Update
+    function updateClock() {
+        const now = new Date();
+        const options = { timeZone: 'Asia/Kolkata', hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        document.getElementById('live-clock').innerText = now.toLocaleTimeString('en-US', options) + ' IST';
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Timeline Filter
+    function filterTimeline(category, btn) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const items = document.querySelectorAll('.timeline-item');
+        items.forEach(item => {
+            if (category === 'all' || item.getAttribute('data-category') === category) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+
+    // Holdings Table Filter
+    function filterTable(type, btn) {
+        btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const rows = document.querySelectorAll('#holdings-table tbody tr');
+        rows.forEach(row => {
+            if (type === 'all' || row.getAttribute('data-type') === type) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    // Table Search Filter
+    function searchHoldings() {
+        const query = document.getElementById('table-search').value.toUpperCase();
+        const rows = document.querySelectorAll('#holdings-table tbody tr');
+        rows.forEach(row => {
+            const sym = row.querySelector('.sym-cell').innerText.toUpperCase();
+            if (sym.includes(query)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+</script>
+
+</body>
+</html>

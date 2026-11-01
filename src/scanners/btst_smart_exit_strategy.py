@@ -10,13 +10,15 @@ Automated BTST Exit Manager for 09:12 AM - 09:45 AM IST:
        • Flat (±1%): Cost-to-cost exit rule
        • Gap Down / Pullback: Hold above Powerful SL or Roll
        • Breakdown (< Powerful SL): Immediate risk protection exit
-  4. ✅ Fallback to latest BTST scan JSON candidates
+  4. ✅ Uses only the saved selected batch; no full-pool or latest-file fallback
   5. ✅ Multi-path resilient credential resolution & instant Telegram alert dispatch
 """
 
 from __future__ import annotations
 
 import io
+import html
+from btst_batch import load_batch, logs_directory, contract_id, project_root
 import json
 import os
 import sys
@@ -24,6 +26,10 @@ import time
 from datetime import datetime, time as time_type, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+ROOT = project_root(__file__)
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 # Ensure UTF-8 output for console
 if sys.platform == "win32":
@@ -221,67 +227,21 @@ class BTSTExitManager:
 # ──────────────────────────────────────────────────────────────
 
 def send_telegram_alert(message: str) -> bool:
-    """Send alert to the main Stock Swing V1 Telegram bot and chat."""
-    try:
-        import requests
-    except ImportError:
-        print(message.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "").replace("<code>", "").replace("</code>", ""))
-        return False
-
-    # Force direct load from environment or project .credentials.json (Stock Swing V1 bot only)
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-
-    targets = []
-    if bot_token and chat_id:
-        targets.append((bot_token, str(chat_id)))
-
-    # Also check project specific credentials.json if env vars not fully loaded
-    cred_file = find_file(".credentials.json")
-    if cred_file and cred_file.exists():
-        try:
-            with open(cred_file, "r", encoding="utf-8") as f:
-                cdata = json.load(f)
-            tg = cdata.get("telegram", {})
-            b_tok = tg.get("bot_token")
-            c_id = tg.get("chat_id")
-            if b_tok and c_id and (b_tok, str(c_id)) not in targets:
-                targets.append((b_tok, str(c_id)))
-        except Exception:
-            pass
-
-    if not targets:
-        print("⚠️ No Telegram targets found. Outputting to console:")
-        print(message.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "").replace("<code>", "").replace("</code>", ""))
-        return False
-
-    success = False
-    for b_tok, cid in targets:
-        try:
-            url = f"https://api.telegram.org/bot{b_tok}/sendMessage"
-            payload = {
-                "chat_id": cid,
-                "text": message,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": True,
-            }
-            res = requests.post(url, json=payload, timeout=10)
-            if res.status_code == 200:
-                print(f"✓ Telegram alert delivered successfully to {cid} (Bot: ...{b_tok[-6:]})!")
-                success = True
-            else:
-                print(f"✗ Telegram delivery failed to {cid}: {res.text}")
-        except Exception as e:
-            print(f"✗ Telegram dispatch error to {cid}: {e}")
-
-    return success
+    """Use the scan's bot; split long reports at complete HTML lines."""
+    from telegram_alerts.options_alert_sender import _send_tg
+    chunks, current = [], []
+    for line in message.splitlines():
+        if current and len("\n".join(current + [line])) > 3500:
+            chunks.append("\n".join(current))
+            current = []
+        current.append(line)
+    if current:
+        chunks.append("\n".join(current))
+    outcomes = [_send_tg(chunk) for chunk in chunks]
+    return bool(outcomes) and all(outcomes)
 
 
-# ──────────────────────────────────────────────────────────────
-# LIVE POSITIONS & BTST EXIT MONITOR
-# ──────────────────────────────────────────────────────────────
-
-def run_automated_exit_monitor(dry_run: bool = False):
+def run_automated_exit_monitor(dry_run: bool = False, log_dir=None, scan_date=None):
     """
     Main automated morning BTST exit engine.
     Reads live overnight F&O positions from Zerodha Kite,
@@ -295,6 +255,12 @@ def run_automated_exit_monitor(dry_run: bool = False):
     now_ist = datetime.now(IST)
     print(f"[{now_ist.strftime('%Y-%m-%d %H:%M:%S IST')}] Running BTST Smart Exit Monitor...")
 
+    try:
+        _, batch = load_batch(logs_directory(__file__, log_dir), scan_date, now_ist)
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"BTST report not sent: {exc}")
+        return False
+    selected_by_id = {contract_id(c): c for c in batch["selected_candidates"]}
     kite = get_kite_client()
     live_positions = []
 
@@ -309,7 +275,8 @@ def run_automated_exit_monitor(dry_run: bool = False):
                 tsym = p.get("tradingsymbol", "")
 
                 # Check for open F&O option positions
-                if qty != 0 and (seg == "FO" or "CE" in tsym or "PE" in tsym):
+                key = f"{p.get('exchange', 'NFO')}:{tsym}"
+                if qty > 0 and overnight_qty > 0 and key in selected_by_id:
                     buy_price = p.get("buy_price", 0.0) or p.get("average_price", 0.0)
                     live_positions.append({
                         "tradingsymbol": tsym,
@@ -335,14 +302,14 @@ def run_automated_exit_monitor(dry_run: bool = False):
     )
 
     if live_positions:
-        msg += "📊 <b>LIVE OVERNIGHT BTST POSITIONS:</b>\n\n"
+        msg += f"📊 <b>Matching overnight holdings: {len(live_positions)} / {len(selected_by_id)} selected</b>\n\n"
         for pos in live_positions:
             tsym = pos["tradingsymbol"]
             qty = pos["qty"]
             buy_price = pos["buy_price"]
 
             # Fetch Live Quote for Option & Underlying Spot
-            opt_key = f"NFO:{tsym}"
+            opt_key = f"{pos['exchange']}:{tsym}"
             underlying = "".join([c for c in tsym.split("2")[0] if c.isalpha()])
             spot_key = f"NSE:{underlying}"
 
@@ -356,7 +323,10 @@ def run_automated_exit_monitor(dry_run: bool = False):
             opt_q = quotes.get(opt_key, {})
             spot_q = quotes.get(spot_key, {})
 
-            opt_ltp = opt_q.get("last_price", buy_price)
+            if opt_q.get("last_price") is None:
+                msg += f"<b>{html.escape(tsym)}</b>: quote unavailable; no P&amp;L estimate.\n\n"
+                continue
+            opt_ltp = opt_q["last_price"]
             opt_high = opt_q.get("ohlc", {}).get("high", opt_ltp)
             opt_low = opt_q.get("ohlc", {}).get("low", opt_ltp)
             spot_ltp = spot_q.get("last_price", 0.0)
@@ -367,9 +337,10 @@ def run_automated_exit_monitor(dry_run: bool = False):
             pnl_amt = (opt_ltp - buy_price) * qty
             pnl_pct = ((opt_ltp - buy_price) / buy_price * 100) if buy_price > 0 else 0
 
-            powerful_sl = round(buy_price * 0.78, 2)
-            t1 = round(buy_price * 1.25, 2)
-            t2 = round(buy_price * 1.50, 2)
+            selected = selected_by_id[opt_key]
+            powerful_sl = float(selected.get("powerful_sl", selected.get("sl", buy_price * 0.78)))
+            t1 = float(selected.get("t1", buy_price * 1.25))
+            t2 = float(selected.get("t2", buy_price * 1.50))
 
             pnl_icon = "🟢" if pnl_amt >= 0 else "🔴"
             opt_type_icon = "📈" if "CE" in tsym else "📉"
@@ -379,7 +350,7 @@ def run_automated_exit_monitor(dry_run: bool = False):
             exit_plan = manager.calculate_exit_price(opt_ltp, condition)
 
             msg += f"{opt_type_icon} <b>{tsym}</b>\n"
-            msg += f"• <b>Quantity:</b> <code>{qty} ({qty // 175 if qty >= 175 else 1} Lot)</code>\n"
+            msg += f"• <b>Quantity:</b> <code>{qty} units</code>\n"
             msg += f"• <b>Buy Avg:</b> <code>₹{buy_price:.2f}</code>\n"
             msg += f"• <b>Live Option LTP:</b> <code>₹{opt_ltp:.2f}</code> ({opt_low:.2f} - {opt_high:.2f})\n"
             if spot_ltp > 0:
@@ -393,47 +364,18 @@ def run_automated_exit_monitor(dry_run: bool = False):
             msg += f"   💡 <b>Immediate Action:</b> <i>{exit_plan['recommendation']}</i>\n\n"
             msg += f"{DIVIDER}\n\n"
 
-    else:
-        # Fallback: Read latest BTST scan candidates from logs / data directory
-        search_dirs = [
-            Path("logs"),
-            Path("data"),
-            Path("D:/NiftyScanner/STOCK_SWING_V1_updated/logs"),
-            Path("D:/NiftyScanner/STOCK_SWING_V1_updated/data"),
-            Path("/home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/logs"),
-            Path("/home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/data"),
-        ]
-        json_files = []
-        for d in search_dirs:
-            if d.exists():
-                json_files.extend(list(d.glob("*btst*.json")))
-
-        if json_files:
-            latest_log = max(json_files, key=lambda f: f.stat().st_mtime)
-            try:
-                with open(latest_log, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                stock_list = data.get("stocks", []) or data.get("results", {}).get("stocks", []) or data.get("candidates", [])
-                # Show all candidates from yesterday's scan log so matching is complete
-                candidates = stock_list
-
-                if candidates:
-                    msg += "📋 <b>YESTERDAY'S BTST SCAN CANDIDATES:</b>\n\n"
-                    for c in candidates:
-                        sym = c.get("symbol", "")
-                        opt_type = c.get("option_type", "CE")
-                        icon = "🟢" if opt_type == "CE" else "🔴"
-                        opt_sym = c.get("option_symbol", f"{sym} {c.get('strike', 'ATM')} {opt_type}")
-                        ltp = c.get("ltp", c.get("entry_price", 0.0))
-                        sl = c.get("powerful_sl", c.get("sl", round(ltp * 0.78, 2)))
-                        t1 = round(ltp * 1.25, 2)
-
-                        msg += f"{icon} <b>{opt_sym}</b>\n"
-                        msg += f"• <b>Entry:</b> ₹{ltp:.2f} | <b>SL:</b> ₹{sl:.2f} | <b>T1:</b> ₹{t1:.2f}\n"
-                        msg += f"• <i>Action: If gap up >₹{t1:.2f}, lock profit. If below ₹{sl:.2f}, cut loss.</i>\n\n"
-            except Exception as e:
-                print(f"Error reading BTST JSON log: {e}")
+    # Include every selected contract once; never substitute unrelated broker holdings.
+    held = {f"{p['exchange']}:{p['tradingsymbol']}" for p in live_positions}
+    remaining = [c for key, c in selected_by_id.items() if key not in held]
+    msg += f"<b>Saved batch:</b> {html.escape(batch['batch_id'])} | {batch['scan_date']}\n"
+    if remaining:
+        msg += "\n<b>Selected signals without a confirmed open overnight holding:</b>\n"
+        for c in remaining:
+            opt_sym = html.escape(c["option_symbol"])
+            entry = float(c.get("entry_price", c.get("ltp", 0)))
+            status = batch.get("telegram_delivery", {}).get(contract_id(c), "unknown")
+            msg += f"• <b>{opt_sym}</b> | Scan entry ₹{entry:.2f} | Alert: {status}\n"
+        msg += "These are saved signals; no position or exit fill is assumed.\n\n"
 
     msg += "⚠️ <b>DISCIPLINE NOTE:</b> Do not hold stock options through afternoon theta decay if spot momentum stalls. Lock gains at T1 or trail to cost."
 
@@ -445,7 +387,8 @@ def run_automated_exit_monitor(dry_run: bool = False):
                     .replace("<code>", "").replace("</code>", ""))
         print(plain)
     else:
-        send_telegram_alert(msg)
+        return send_telegram_alert(msg)
+    return True
 
 
 # ──────────────────────────────────────────────────────────────
@@ -465,5 +408,9 @@ if __name__ == "__main__":
         action="store_true",
         help="Suppress Telegram dispatch; print message to console only (paper-trading / test mode)",
     )
+    _parser.add_argument("--log-dir", help="Shared BTST log directory (or BTST_LOG_DIR)")
+    _parser.add_argument("--scan-date", help="Explicit prior scan date YYYY-MM-DD")
     _args = _parser.parse_args()
-    run_automated_exit_monitor(dry_run=_args.dry_run)
+    result = run_automated_exit_monitor(dry_run=_args.dry_run, log_dir=_args.log_dir, scan_date=_args.scan_date)
+    if result is False:
+        sys.exit(2)

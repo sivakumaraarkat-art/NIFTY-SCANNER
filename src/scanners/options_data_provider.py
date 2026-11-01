@@ -18,6 +18,7 @@ Capabilities:
 from __future__ import annotations
 
 import os
+import time
 import json
 import math
 import datetime
@@ -115,6 +116,16 @@ def get_kite_client() -> Optional[Any]:
 
     token = os.getenv("ZERODHA_ACCESS_TOKEN", "").strip()
     if not token:
+        master_token = Path("/home/ubuntu/NiftyScanner/.kite_access_token")
+        if master_token.exists():
+            try:
+                val = master_token.read_text(encoding="utf-8").strip()
+                if val:
+                    token = val
+            except Exception:
+                pass
+
+    if not token:
         existing_tokens = [p for p in token_candidates if p and p.exists()]
         existing_tokens.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         for p in existing_tokens:
@@ -127,6 +138,16 @@ def get_kite_client() -> Optional[Any]:
                 pass
 
     api_key = os.getenv("ZERODHA_API_KEY", "").strip()
+    if not api_key:
+        master_key = Path("/home/ubuntu/NiftyScanner/.kite_api_key")
+        if master_key.exists():
+            try:
+                val = master_key.read_text(encoding="utf-8").strip()
+                if val:
+                    api_key = val
+            except Exception:
+                pass
+
     if not api_key:
         for p in key_candidates:
             if p and p.exists():
@@ -643,6 +664,9 @@ def resolve_all_candidates(
 
         if not sym:
             continue
+
+        if kite is not None:
+            time.sleep(0.35)
 
         cand = resolve_option_candidate(
             kite, nfo_instruments, sym, sent, is_btst=is_btst, account_size=account_size, sentiment_score=score

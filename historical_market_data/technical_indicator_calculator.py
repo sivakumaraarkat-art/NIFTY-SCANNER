@@ -113,6 +113,101 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # 20-day return (momentum)
     result["return_20d"] = close.pct_change(periods=20)
 
+    # -------------------------------------------------------------------------
+    # Bollinger Bands - Volatility-based mean reversion
+    # -------------------------------------------------------------------------
+    bb_window = 20
+    bb_std_mult = 2.0
+    
+    sma_bb = close.rolling(window=bb_window, min_periods=bb_window).mean()
+    bb_std = close.rolling(window=bb_window, min_periods=bb_window).std()
+    
+    result["bb_upper"] = sma_bb + (bb_std * bb_std_mult)
+    result["bb_lower"] = sma_bb - (bb_std * bb_std_mult)
+    result["bb_middle"] = sma_bb
+    result["bb_sma"] = sma_bb
+
+    # -------------------------------------------------------------------------
+    # MACD - Momentum indicator for trend confirmation
+    # -------------------------------------------------------------------------
+    # Fast and slow EMA periods
+    macd_fast = 12
+    macd_slow = 26
+    macd_signal = 9
+    
+    ema_fast = close.ewm(span=macd_fast, adjust=False).mean()
+    ema_slow = close.ewm(span=macd_slow, adjust=False).mean()
+    
+    result["macd_line"] = ema_fast - ema_slow
+    result["macd_signal"] = result["macd_line"].ewm(span=macd_signal, adjust=False).mean()
+    result["macd_hist"] = result["macd_line"] - result["macd_signal"]
+
+    return result
+
+
+def add_intraday_indicators(
+    df: pd.DataFrame, atr_period: int = 10, atr_multiplier: float = 3.0
+) -> pd.DataFrame:
+    """Add session VWAP and SuperTrend to chronologically ordered intraday OHLCV."""
+    required_columns = {"date", "open", "high", "low", "close", "volume"}
+    missing = required_columns - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+    if df.empty:
+        raise ValueError("Intraday data must contain at least one candle")
+    if atr_period < 1 or atr_multiplier <= 0:
+        raise ValueError("atr_period and atr_multiplier must be positive")
+
+    result = df.copy()
+    timestamps = pd.to_datetime(result["date"], errors="coerce")
+    if timestamps.isna().any():
+        raise ValueError("Intraday date column contains invalid timestamps")
+    if not timestamps.is_monotonic_increasing:
+        raise ValueError("Intraday candles must be in chronological order")
+
+    high = result["high"].astype(float)
+    low = result["low"].astype(float)
+    close = result["close"].astype(float)
+    volume = result["volume"].astype(float)
+
+    typical_price = (high + low + close) / 3
+    session = timestamps.dt.normalize()
+    cumulative_value = (typical_price * volume).groupby(session, sort=False).cumsum()
+    cumulative_volume = volume.groupby(session, sort=False).cumsum()
+    result["intraday_vwap"] = cumulative_value / cumulative_volume.replace(0, np.nan)
+
+    previous_close = close.shift(1)
+    true_range = pd.concat(
+        [high - low, (high - previous_close).abs(), (low - previous_close).abs()],
+        axis=1,
+    ).max(axis=1)
+    atr = true_range.ewm(alpha=1 / atr_period, adjust=False).mean()
+    midpoint = (high + low) / 2
+    basic_upper = (midpoint + atr_multiplier * atr).to_numpy()
+    basic_lower = (midpoint - atr_multiplier * atr).to_numpy()
+    close_values = close.to_numpy()
+
+    final_upper = basic_upper.copy()
+    final_lower = basic_lower.copy()
+    bullish = np.ones(len(result), dtype=bool)
+    for index in range(1, len(result)):
+        if basic_upper[index] < final_upper[index - 1] or close_values[index - 1] > final_upper[index - 1]:
+            final_upper[index] = basic_upper[index]
+        else:
+            final_upper[index] = final_upper[index - 1]
+
+        if basic_lower[index] > final_lower[index - 1] or close_values[index - 1] < final_lower[index - 1]:
+            final_lower[index] = basic_lower[index]
+        else:
+            final_lower[index] = final_lower[index - 1]
+
+        if bullish[index - 1]:
+            bullish[index] = close_values[index] >= final_lower[index]
+        else:
+            bullish[index] = close_values[index] > final_upper[index]
+
+    result["intraday_supertrend"] = np.where(bullish, final_lower, final_upper)
+    result["intraday_trend"] = np.where(bullish, "bullish", "bearish")
     return result
 
 
@@ -137,6 +232,11 @@ def validate_indicators(df: pd.DataFrame, symbol: str = "UNKNOWN") -> bool:
         "volume_ratio20",
         "high20",
         "return_20d",
+        "bb_upper",
+        "bb_lower",
+        "macd_line",
+        "macd_signal",
+        "macd_hist",
     ]
 
     # Check all columns exist
