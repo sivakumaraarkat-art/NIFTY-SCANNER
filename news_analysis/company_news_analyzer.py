@@ -23,9 +23,17 @@ if __package__ in (None, ""):
     project_root = Path(__file__).resolve().parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
-    from news_analysis.negative_event_detector import detect_negative_events
+    from news_analysis.negative_event_detector import (
+        detect_negative_events,
+        detect_upcoming_earnings,
+        has_critical_crash_risk,
+    )
 else:
-    from .negative_event_detector import detect_negative_events
+    from .negative_event_detector import (
+        detect_negative_events,
+        detect_upcoming_earnings,
+        has_critical_crash_risk,
+    )
 
 # Cache to store news per symbol: {symbol: (timestamp, articles, analysis)}
 _NEWS_CACHE: dict[str, tuple[float, list[dict], dict]] = {}
@@ -106,6 +114,10 @@ POSITIVE_CATALYSTS = [
     "secures order",
     "contract win",
     "deal",
+    "binding mou",
+    "mou",
+    "slump sale",
+    "asset monetization",
     "profit jumps",
     "profit surges",
     "profit rises",
@@ -118,6 +130,7 @@ POSITIVE_CATALYSTS = [
     "new plant",
     "acquisition",
     "joint venture",
+    "jv",
     "hits new high",
     "rallies",
     "surges",
@@ -129,6 +142,11 @@ POSITIVE_CATALYSTS = [
     "partnership",
     "dividend",
     "bonus shares",
+    "warrant conversion",
+    "warrant allotment",
+    "merger",
+    "amalgamation",
+    "stake buy",
     "product launch",
     "fda approval",
     "market share gain",
@@ -172,7 +190,7 @@ def fetch_company_news(symbol: str, max_articles: int = 3) -> list[dict]:
             return cached_articles
 
     company_name = SYMBOL_NAME_MAP.get(symbol, symbol)
-    query_str = f'"{company_name}" share OR "{symbol}" NSE India stock'
+    query_str = f'"{company_name}" OR "{symbol}" ("BSE" OR "NSE" OR "corporate announcement" OR "Regulation 30" OR "Board meeting" OR "MoU" OR "acquisition" OR "sale" OR "results" OR "share price")'
     encoded_query = urllib.parse.quote(query_str)
     url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-IN&gl=IN&ceid=IN:en"
 
@@ -262,26 +280,46 @@ def analyze_news_sentiment(symbol: str, articles: list[dict]) -> dict:
                 positive_catalysts.append(f"🟢 {title}")
                 break
 
-    # Scan for critical red flags
+    # Scan for critical red flags and crash risks
     red_flags = detect_negative_events(articles)
+    is_crash_risk, crash_reason = has_critical_crash_risk(articles)
+    upcoming_earnings = detect_upcoming_earnings(articles)
 
-    # Determine overall sentiment
-    if red_flags:
+    # Determine overall sentiment and future predictive outlook
+    if is_crash_risk:
+        sentiment = "CAUTION"
+        sentiment_score = -0.9
+        summary_badge = "🚨 Caution: Critical Red Flag / Crash Hazard (Avoid)"
+        predictive_outlook = f"🚨 HIGH CRASH RISK: {crash_reason}"
+    elif upcoming_earnings:
+        sentiment = "CAUTION"
+        sentiment_score = -0.4
+        summary_badge = "⚠️ Caution: Earnings Blackout Risk (Binary Event Ahead)"
+        predictive_outlook = f"⚠️ EARNINGS RISK: Results scheduled within swing window"
+    elif red_flags:
         sentiment = "CAUTION"
         sentiment_score = -0.6
-        summary_badge = "⚠️ Caution (Negative Red Flag Detected)"
+        summary_badge = "⚠️ Caution (Negative Event Detected)"
+        predictive_outlook = "⚠️ CAUTION: Negative news friction"
     elif len(positive_catalysts) >= 1:
         sentiment = "POSITIVE"
         sentiment_score = 0.75
         summary_badge = "🟢 Positive (Growth Catalyst / Bullish News)"
+        predictive_outlook = "🚀 HIGH CONVICTION TAILWIND (Order Wins/Growth Catalysts)"
     else:
         sentiment = "NEUTRAL"
         sentiment_score = 0.0
         summary_badge = "⚪ Neutral (No Adverse Events)"
+        predictive_outlook = "🟢 CLEAN STRUCTURE (Clean news flow, no crash flags)"
 
     analysis = {
         "sentiment": sentiment,
         "sentiment_score": sentiment_score,
+        "is_crash_risk": is_crash_risk,
+        "crash_reason": crash_reason,
+        "earnings_risk": bool(upcoming_earnings),
+        "earnings_notices": upcoming_earnings,
+        "predictive_outlook": predictive_outlook,
         "positive_catalysts": positive_catalysts[:2],
         "red_flags": red_flags,
         "headlines": headlines[:2],
@@ -331,6 +369,11 @@ def enrich_candidate_with_news(candidate: dict) -> dict:
         "positive_catalysts_with_dates"
     ]
     enriched["news_red_flags"] = analysis["red_flags"]
+    enriched["is_crash_risk"] = analysis.get("is_crash_risk", False)
+    enriched["crash_reason"] = analysis.get("crash_reason", "")
+    enriched["earnings_risk"] = analysis.get("earnings_risk", False)
+    enriched["earnings_notices"] = analysis.get("earnings_notices", [])
+    enriched["predictive_outlook"] = analysis.get("predictive_outlook", "")
 
     return enriched
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,7 @@ CAP_SEGMENT_PRIORITY = ("LARGE", "MID", "SMALL")
 DEFAULT_CAP_SNAPSHOT_DIR = (
     Path(__file__).resolve().parents[1] / "data" / "nse_cap_segments"
 )
-DEFAULT_MAX_SNAPSHOT_AGE_DAYS = 45
+DEFAULT_MAX_SNAPSHOT_AGE_DAYS = int(os.getenv("NSE_CAP_MAX_AGE_DAYS", "180"))
 
 
 def classify_market_cap(value: Any) -> str:

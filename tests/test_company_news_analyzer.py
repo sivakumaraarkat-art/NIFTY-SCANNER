@@ -73,6 +73,27 @@ def test_enrich_candidate_with_news():
     assert "news_badge" in enriched
     assert "news_headlines" in enriched
     assert isinstance(enriched["news_headlines"], list)
+    assert "is_crash_risk" in enriched
+    assert "earnings_risk" in enriched
+    assert "predictive_outlook" in enriched
+
+
+def test_crash_risk_and_earnings_detection():
+    from news_analysis.negative_event_detector import (
+        has_critical_crash_risk,
+        detect_upcoming_earnings,
+    )
+    # Test Pharma US-FDA Form 483 / Warning Letter Crash Risk
+    pharma_news = [{"title": "USFDA issues warning letter to company with official action indicated"}]
+    is_risk, reason = has_critical_crash_risk(pharma_news)
+    assert is_risk is True
+    assert "Warning" in reason or "Pharma" in reason
+
+    # Test Upcoming Earnings Blackout
+    earnings_news = [{"title": "Board meeting to consider Q2 financial results on Nov 10"}]
+    warnings = detect_upcoming_earnings(earnings_news)
+    assert len(warnings) >= 1
+    assert "Upcoming Results" in warnings[0]
 
 
 def test_company_news_analyzer_runs_when_invoked_as_script():

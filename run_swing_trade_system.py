@@ -35,6 +35,7 @@ from swing_strategies.swing_setup_engine import generate_setup_candidates
 from trade_selection.swing_candidate_ranker import rank_trade_candidates
 from news_analysis.company_news_analyzer import enrich_candidates_with_news
 from telegram_alerts.swing_trade_alert_sender import send_swing_alerts
+from trade_selection.active_swing_trade_registry import register_swing_candidates
 from stock_universe.controlled_stock_universe import (
     parse_controlled_symbols,
     select_controlled_universe,
@@ -191,21 +192,62 @@ def main():
     print(f"      Ranked high-conviction candidates: {len(ranked)}")
 
     # ------------------------------------------------------------------
-    # STAGE 8.5: LIVE NEWS & CATALYST ENRICHMENT
+    # STAGE 8.5: LIVE NEWS, PREDICTIVE CATALYSTS & CRASH RISK SHIELD
     # ------------------------------------------------------------------
     if ranked:
-        print(f"      Fetching news and sentiment for top {len(ranked)} candidates...")
+        print(f"      Fetching news & predictive sentiment for top {len(ranked)} candidates...")
         ranked = enrich_candidates_with_news(ranked)
 
+        # Apply Future Predictive Crash Shield (Disqualify SEBI/Fraud/Earnings Blackout)
+        safe_ranked = []
+        rejected_risks = []
+        for cand in ranked:
+            if cand.get("is_crash_risk", False):
+                rejected_risks.append((cand["symbol"], cand.get("crash_reason", "Critical Red Flag")))
+            elif cand.get("earnings_risk", False):
+                rejected_risks.append((cand["symbol"], "Upcoming Earnings Blackout in 10-day window"))
+            else:
+                safe_ranked.append(cand)
+
+        if rejected_risks:
+            print(f"      🛡️ Crash Shield Alert: Filtered out {len(rejected_risks)} stock(s) with crash hazards:")
+            for sym, rsn in rejected_risks:
+                print(f"         - ❌ {sym}: {rsn}")
+
+        ranked = safe_ranked
+
     # ------------------------------------------------------------------
-    # STAGE 9: NOTIFICATIONS (Telegram Alert with FII/DII + News)
+    # STAGE 9: NOTIFICATIONS & ACTIVE 10-DAY SWING REGISTRY
     # ------------------------------------------------------------------
     send_swing_alerts(ranked, settings)
-    print("[9/9] Telegram stage completed.\n")
+    if ranked:
+        registered = register_swing_candidates(ranked, max_holding_days=10)
+        print(f"      Registered {len(registered)} trade(s) for 7-10 day lifecycle tracking.")
+    print("[9/9] Telegram stage completed & active registry updated.\n")
 
     print("SCAN COMPLETE - SIGNAL ONLY / NO AUTOMATIC ORDERS")
     return ranked
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="Stock Swing V1 Master Engine")
+    parser.add_argument("--monitor-exits", action="store_true", help="Monitor active trades for targets, stop-loss, and 10-day time exit")
+    parser.add_argument("--audit", action="store_true", help="Generate weekly swing trade performance audit and upload to Telegram")
+    parser.add_argument("--close-and-audit", action="store_true", help="Evaluate exits for active batch and dispatch weekly Telegram performance report + Excel")
+    args = parser.parse_args()
+
+    if args.close_and_audit:
+        from src.scanners.swing_trade_exit_monitor import monitor_active_swing_trades
+        from src.scanners.generate_swing_audit import generate_swing_trade_audit
+        print("Running Weekly Swing Exit Evaluation & Report Generation...")
+        monitor_active_swing_trades()
+        generate_swing_trade_audit()
+    elif args.monitor_exits:
+        from src.scanners.swing_trade_exit_monitor import monitor_active_swing_trades
+        monitor_active_swing_trades()
+    elif args.audit:
+        from src.scanners.generate_swing_audit import generate_swing_trade_audit
+        generate_swing_trade_audit()
+    else:
+        main()

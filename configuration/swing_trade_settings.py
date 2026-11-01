@@ -26,6 +26,8 @@ class Settings:
     controlled_universe_size: int
     minimum_stock_price: float
     maximum_stock_price: float
+    portfolio_telegram_bot_token: str = ""
+    portfolio_telegram_chat_id: str = ""
 
 
 def load_settings():
@@ -36,6 +38,16 @@ def load_settings():
     token = Path(token_value).expanduser()
     if not token.is_absolute():
         token = (PROJECT_ROOT / token).resolve()
+    if not token.exists():
+        for fallback in (
+            PROJECT_ROOT / ".kite_access_token",
+            PROJECT_ROOT.parent / ".kite_access_token",
+            Path("/home/ubuntu/NiftyScanner/.kite_access_token"),
+            Path("D:/NiftyScanner/.kite_access_token"),
+        ):
+            if fallback.exists():
+                token = fallback.resolve()
+                break
     cache = PROJECT_ROOT / os.getenv(
         "MARKET_DATA_CACHE_DIR", "database/market_data_cache"
     )
@@ -57,4 +69,6 @@ def load_settings():
         int(os.getenv("CONTROLLED_UNIVERSE_SIZE", "300")),
         float(os.getenv("MINIMUM_STOCK_PRICE", "0")),
         float(os.getenv("MAXIMUM_STOCK_PRICE", "999999")),
+        portfolio_telegram_bot_token=os.getenv("PORTFOLIO_TELEGRAM_BOT_TOKEN", "").strip(),
+        portfolio_telegram_chat_id=os.getenv("PORTFOLIO_TELEGRAM_CHAT_ID", "").strip(),
     )
