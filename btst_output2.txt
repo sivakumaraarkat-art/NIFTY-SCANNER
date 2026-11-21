@@ -1,0 +1,4 @@
+
+🔍 Resolving live market option strikes, quotes & Greeks for BTST...
+
+⚠️ No qualified BTST candidates found matching score and theta criteria.

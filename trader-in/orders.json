@@ -1,0 +1,71 @@
+{
+  "created_by": "india-budget",
+  "created_at": "2026-11-08T05:34:59Z",
+  "status": "proposed",
+  "paper": true,
+  "broker": "zerodha",
+  "currency": "INR",
+  "note": "Proposals only. Nothing is placed until india-risk passes each order and you say yes to it in the chat.",
+  "source": "trader-in/plan.json (IONEXCHANG level 2026-11-08)",
+  "orders": [
+    {
+      "variety": "regular",
+      "exchange": "NSE",
+      "tradingsymbol": "IONEXCHANG",
+      "transaction_type": "BUY",
+      "quantity": 26,
+      "product": "MIS",
+      "order_type": "MARKET",
+      "validity": "DAY",
+      "tag": "indiabudget",
+      "exit_plan": {
+        "kind": "sl-m+limit",
+        "when": "after the entry fills (MIS): place both; when one fills, cancel the other at once",
+        "stop_leg": {
+          "variety": "regular",
+          "exchange": "NSE",
+          "tradingsymbol": "IONEXCHANG",
+          "transaction_type": "SELL",
+          "quantity": 26,
+          "product": "MIS",
+          "validity": "DAY",
+          "tag": "indiabudget",
+          "order_type": "SL-M",
+          "trigger_price": 285.0
+        },
+        "target_leg": {
+          "variety": "regular",
+          "exchange": "NSE",
+          "tradingsymbol": "IONEXCHANG",
+          "transaction_type": "SELL",
+          "quantity": 26,
+          "product": "MIS",
+          "validity": "DAY",
+          "tag": "indiabudget",
+          "order_type": "LIMIT",
+          "price": 340.8
+        }
+      },
+      "why": "level on IONEXCHANG: 26 shares, bound by your ₹500 max loss per trade (26 x 18.60 + ₹8.06 charges = ₹491.66 at the stop)",
+      "plan": {
+        "symbol": "IONEXCHANG",
+        "exchange": "NSE",
+        "currency": "INR",
+        "tick": 0.05,
+        "entry": 303.6,
+        "stop": 285.0,
+        "target": 340.8,
+        "risk_per_share": 18.6,
+        "charges": 8.06,
+        "max_loss": 491.66,
+        "setup": "level",
+        "date": "2026-11-08",
+        "entry_time": null,
+        "flat_by": "15:10",
+        "cas": false,
+        "square_off": "15:25",
+        "session_close": "15:30"
+      }
+    }
+  ]
+}

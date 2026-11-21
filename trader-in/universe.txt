@@ -1,0 +1,50 @@
+ADANIENT|Adani Enterprises Limited|EQ|No Band|yes
+ADANIPORTS|Adani Ports and Special Economic Zone Limited|EQ|No Band|yes
+APOLLOHOSP|Apollo Hospitals Enterprise Limited|EQ|No Band|yes
+ASIANPAINT|Asian Paints Limited|EQ|No Band|yes
+AXISBANK|Axis Bank Limited|EQ|No Band|yes
+BAJAJ-AUTO|Bajaj Auto Limited|EQ|No Band|yes
+BAJAJFINSV|Bajaj Finserv Limited|EQ|No Band|yes
+BAJFINANCE|Bajaj Finance Limited|EQ|No Band|yes
+BEL|Bharat Electronics Limited|EQ|No Band|yes
+BHARTIARTL|Bharti Airtel Limited|EQ|No Band|yes
+BSE|BSE Limited|EQ|No Band|yes
+CIPLA|Cipla Limited|EQ|No Band|yes
+COALINDIA|Coal India Limited|EQ|No Band|yes
+DRREDDY|Dr. Reddy's Laboratories Limited|EQ|No Band|yes
+EICHERMOT|Eicher Motors Limited|EQ|No Band|yes
+ETERNAL|ETERNAL LIMITED|EQ|No Band|yes
+GRASIM|Grasim Industries Limited|EQ|No Band|yes
+HCLTECH|HCL Technologies Limited|EQ|No Band|yes
+HDFCBANK|HDFC Bank Limited|EQ|No Band|yes
+HDFCLIFE|HDFC Life Insurance Company Limited|EQ|No Band|yes
+HINDALCO|Hindalco Industries Limited|EQ|No Band|yes
+HINDUNILVR|Hindustan Unilever Limited|EQ|No Band|yes
+ICICIBANK|ICICI Bank Limited|EQ|No Band|yes
+INDIGO|InterGlobe Aviation Limited|EQ|No Band|yes
+INFY|Infosys Limited|EQ|No Band|yes
+ITC|ITC Limited|EQ|No Band|yes
+JIOFIN|Jio Financial Services Limited|EQ|No Band|yes
+JSWSTEEL|JSW Steel Limited|EQ|No Band|yes
+KOTAKBANK|Kotak Mahindra Bank Limited|EQ|No Band|yes
+LT|Larsen & Toubro Limited|EQ|No Band|yes
+M&M|Mahindra & Mahindra Limited|EQ|No Band|yes
+MARUTI|Maruti Suzuki India Limited|EQ|No Band|yes
+MAXHEALTH|Max Healthcare Institute Limited|EQ|No Band|yes
+NESTLEIND|Nestle India Limited|EQ|No Band|yes
+NTPC|NTPC Limited|EQ|No Band|yes
+ONGC|Oil & Natural Gas Corporation Limited|EQ|No Band|yes
+POWERGRID|Power Grid Corporation of India Limited|EQ|No Band|yes
+RELIANCE|Reliance Industries Limited|EQ|No Band|yes
+SBILIFE|SBI Life Insurance Company Limited|EQ|No Band|yes
+SBIN|State Bank of India|EQ|No Band|yes
+SHRIRAMFIN|Shriram Finance Limited|EQ|No Band|yes
+SUNPHARMA|Sun Pharmaceutical Industries Limited|EQ|No Band|yes
+TATACONSUM|TATA CONSUMER PRODUCTS LIMITED|EQ|No Band|yes
+TATASTEEL|Tata Steel Limited|EQ|No Band|yes
+TCS|Tata Consultancy Services Limited|EQ|No Band|yes
+TECHM|Tech Mahindra Limited|EQ|No Band|yes
+TITAN|Titan Company Limited|EQ|No Band|yes
+TMPV|Tata Motors Passenger Vehicles Limited|EQ|No Band|yes
+TRENT|Trent Limited|EQ|No Band|yes
+ULTRACEMCO|UltraTech Cement Limited|EQ|No Band|yes

@@ -1,0 +1,158 @@
+{
+  "timestamp": "2026-11-08T13:35:53.345143",
+  "quotes": [
+    {
+      "symbol": "DIXON",
+      "ltp": 12625,
+      "prev_close": 12625,
+      "change_pct": 0.0,
+      "high": 12625,
+      "low": 12410,
+      "volume": 0
+    },
+    {
+      "symbol": "KEI",
+      "ltp": 3988,
+      "prev_close": 3988,
+      "change_pct": 0.0,
+      "high": 4014.3,
+      "low": 3850.1,
+      "volume": 0
+    },
+    {
+      "symbol": "KAYNES",
+      "ltp": 3233,
+      "prev_close": 3233,
+      "change_pct": 0.0,
+      "high": 3271.9,
+      "low": 3210,
+      "volume": 0
+    },
+    {
+      "symbol": "TITAGARH",
+      "ltp": 677.85,
+      "prev_close": 677.85,
+      "change_pct": 0.0,
+      "high": 686,
+      "low": 670.05,
+      "volume": 0
+    },
+    {
+      "symbol": "PCBL",
+      "ltp": 279.25,
+      "prev_close": 279.25,
+      "change_pct": 0.0,
+      "high": 280.5,
+      "low": 276,
+      "volume": 0
+    },
+    {
+      "symbol": "KOTAKBANK",
+      "ltp": 480,
+      "prev_close": 480,
+      "change_pct": 0.0,
+      "high": 480,
+      "low": 463,
+      "volume": 0
+    },
+    {
+      "symbol": "NYKAA",
+      "ltp": 353,
+      "prev_close": 353,
+      "change_pct": 0.0,
+      "high": 353.3,
+      "low": 344.55,
+      "volume": 0
+    },
+    {
+      "symbol": "PNB",
+      "ltp": 126.55,
+      "prev_close": 126.55,
+      "change_pct": 0.0,
+      "high": 126.85,
+      "low": 124.31,
+      "volume": 0
+    },
+    {
+      "symbol": "LAURUSLABS",
+      "ltp": 2340,
+      "prev_close": 2340,
+      "change_pct": 0.0,
+      "high": 2341.5,
+      "low": 2309.1,
+      "volume": 0
+    },
+    {
+      "symbol": "DIVISLAB",
+      "ltp": 10320.5,
+      "prev_close": 10320.5,
+      "change_pct": 0.0,
+      "high": 10320.5,
+      "low": 10040.5,
+      "volume": 0
+    },
+    {
+      "symbol": "BLUESTARCO",
+      "ltp": 1575,
+      "prev_close": 1575,
+      "change_pct": 0.0,
+      "high": 1580,
+      "low": 1530,
+      "volume": 0
+    },
+    {
+      "symbol": "ADANIPORTS",
+      "ltp": 1936.6,
+      "prev_close": 1936.6,
+      "change_pct": 0.0,
+      "high": 1941.6,
+      "low": 1877.7,
+      "volume": 0
+    },
+    {
+      "symbol": "ELECTCAST",
+      "ltp": 68.8,
+      "prev_close": 68.8,
+      "change_pct": 0.0,
+      "high": 69.27,
+      "low": 67.35,
+      "volume": 0
+    },
+    {
+      "symbol": "COCHINSHIP",
+      "ltp": 1220,
+      "prev_close": 1220,
+      "change_pct": 0.0,
+      "high": 1228,
+      "low": 1194.2,
+      "volume": 0
+    },
+    {
+      "symbol": "RELIANCE",
+      "ltp": 1320,
+      "prev_close": 1320,
+      "change_pct": 0.0,
+      "high": 1320,
+      "low": 1295,
+      "volume": 0
+    },
+    {
+      "symbol": "SBIN",
+      "ltp": 1018.5,
+      "prev_close": 1018.5,
+      "change_pct": 0.0,
+      "high": 1020,
+      "low": 990.5,
+      "volume": 0
+    },
+    {
+      "symbol": "BSE",
+      "ltp": 3800,
+      "prev_close": 3800,
+      "change_pct": 0.0,
+      "high": 3831.3,
+      "low": 3714.3,
+      "volume": 0
+    }
+  ]
+}

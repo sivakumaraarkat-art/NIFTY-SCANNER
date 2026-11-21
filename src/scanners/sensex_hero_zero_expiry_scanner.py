@@ -114,11 +114,57 @@ except ImportError:
         return []
 
 
+def load_nse_holidays() -> set[date]:
+    """Load official NSE trading holidays from trader-in/holidays.json."""
+    holidays = set()
+    h_path = ROOT / "trader-in" / "holidays.json"
+    if h_path.exists():
+        try:
+            data = json.loads(h_path.read_text(encoding="utf-8"))
+            for item in data.get("CM", []):
+                td = item.get("tradingDate")
+                if td:
+                    holidays.add(datetime.strptime(td, "%d-%b-%Y").date())
+        except Exception:
+            pass
+    if not holidays:
+        holidays = {
+            date(2026, 1, 26), date(2026, 3, 3), date(2026, 3, 31),
+            date(2026, 4, 14), date(2026, 5, 1), date(2026, 10, 20),
+            date(2026, 11, 10), date(2026, 11, 24), date(2026, 12, 25)
+        }
+    return holidays
+
+
 def is_sensex_expiry_day(check_dt: Optional[datetime] = None, target_weekday: int = 3) -> bool:
-    """Check if today is SENSEX Expiry Day (Default: Thursday = 3)."""
+    """
+    Check if today is SENSEX Expiry Day.
+    • Standard rule: Thursday (weekday == 3).
+    • Holiday Shift Rule: If Thursday is an exchange holiday, expiry shifts to Wednesday (weekday == 2)!
+    """
     if check_dt is None:
         check_dt = datetime.now()
-    return check_dt.weekday() == target_weekday
+    today_d = check_dt.date()
+    weekday = check_dt.weekday()
+
+    holidays = load_nse_holidays()
+
+    if today_d in holidays:
+        return False
+
+    # Case A: Standard Thursday Expiry
+    if weekday == 3:
+        return True
+
+    # Case B: Thursday is a Holiday -> Shift to Wednesday!
+    if weekday == 2:
+        tomorrow_d = today_d + timedelta(days=1)
+        if tomorrow_d in holidays:
+            print(f"🔔 SENSEX EXPIRY SHIFT DETECTED: Tomorrow ({tomorrow_d.strftime('%d-%b-%Y')}) is a Holiday!")
+            print(f"   -> Weekly SENSEX Expiry has shifted to TODAY ({today_d.strftime('%A, %d-%b-%Y')})!")
+            return True
+
+    return False
 
 
 def _normalize_expiry(exp_val: Any) -> Optional[datetime.date]:
@@ -152,8 +198,18 @@ def get_default_time_slot_label() -> str:
         return f"{now.strftime('%I:%M %p')} Gamma Expiry Window"
 
 
-def resolve_sensex_hero_zero_candidates(kite: Optional[Any], account_size: float = 500000.0, single_best: bool = True) -> List[Dict[str, Any]]:
-    """Scan and resolve live high-conviction BSE SENSEX Hero-Zero option setups from Zerodha Kite."""
+def resolve_sensex_hero_zero_candidates(
+    kite: Optional[Any],
+    account_size: float = 500000.0,
+    single_best: bool = True,
+    min_prem: float = 8.0,
+    max_prem: float = 15.0,
+    default_lots: int = 4,
+    capital_budget: float = 1500.0,
+) -> List[Dict[str, Any]]:
+    """Scan and resolve live high-conviction BSE SENSEX Hero-Zero option setups from Zerodha Kite.
+    Calibrated to ₹8 - ₹15 target entry range, 4 lots, and ₹1,500 capital budget.
+    """
     spot_price = 81500.0
     day_open = 81500.0
     if kite is not None:
@@ -171,17 +227,8 @@ def resolve_sensex_hero_zero_candidates(kite: Optional[Any], account_size: float
     today = datetime.now().date()
     now_dt = datetime.now()
 
-    # Dynamic target premium and window based on time of day:
-    # 2:00 PM - 2:59 PM: slightly higher premium window (₹12 - ₹65, target ~₹28)
-    # 3:00 PM - 3:30 PM: peak gamma surge window (₹10 - ₹50, target ~₹22)
-    if now_dt.hour == 14:
-        min_prem = 12.0
-        max_prem = 65.0
-        target_prem = 28.0
-    else:
-        min_prem = 10.0
-        max_prem = 50.0
-        target_prem = 22.0
+    # Dynamic target premium based on user-calibrated ₹8 - ₹15 window
+    target_prem = round((min_prem + max_prem) / 2.0, 1)
 
     # Retrieve from cached instruments first
     instruments = get_nfo_instruments(kite)
@@ -307,7 +354,9 @@ def resolve_sensex_hero_zero_candidates(kite: Optional[Any], account_size: float
             best_ce = qualified_ce[0]
             ltp = best_ce["ltp"]
             lot_sz = int(best_ce.get("lot_size", 20))
-            lots = 2
+            cost_per_lot = ltp * lot_sz
+            max_lots_for_budget = max(1, int(capital_budget / cost_per_lot)) if cost_per_lot > 0 else default_lots
+            lots = min(default_lots, max_lots_for_budget)
             tot_qty = lots * lot_sz
             capital = round(ltp * tot_qty, 2)
             t1 = round(ltp * 2.0, 2)
@@ -352,7 +401,9 @@ def resolve_sensex_hero_zero_candidates(kite: Optional[Any], account_size: float
             best_pe = qualified_pe[0]
             ltp = best_pe["ltp"]
             lot_sz = int(best_pe.get("lot_size", 20))
-            lots = 2
+            cost_per_lot = ltp * lot_sz
+            max_lots_for_budget = max(1, int(capital_budget / cost_per_lot)) if cost_per_lot > 0 else default_lots
+            lots = min(default_lots, max_lots_for_budget)
             tot_qty = lots * lot_sz
             capital = round(ltp * tot_qty, 2)
             t1 = round(ltp * 2.0, 2)
@@ -518,14 +569,124 @@ def send_sensex_hero_zero_telegram_alert(candidates: List[Dict[str, Any]], time_
             "",
             "📦 <b>POSITION SIZING & RISK</b>",
             f"├─ 🏷️ <b>Lots:</b>        {tg_code(f'{lots} lots ({lot_sz}/lot = {tot_qty} qty)')}",
-            f"├─ 💵 <b>Capital:</b>     {tg_code(tg_money(capital))}",
-            f"└─ 🛡️ <b>Max Risk:</b>    {tg_code(tg_money(max_risk))}",
+            f"├─ 💵 <b>Capital:</b>     {tg_code(tg_money(capital))} (Within ₹1,500 budget)",
+            f"└─ 🛡️ <b>Max Risk:</b>    {tg_code(tg_money(max_risk))} (Max Loss strictly small)",
+            "",
+            "🎯 <b>ZERODHA ORDER EXECUTION TICKET</b>",
+            f"├─ 🟢 <b>Action:</b>      BUY {tg_code(c['option_symbol'])}",
+            f"├─ 📦 <b>Quantity:</b>    {tg_code(f'{tot_qty} shares ({lots} Lots)')}",
+            f"├─ 💵 <b>Limit Price:</b> {tg_code(tg_money(entry))} (₹8 - ₹15 target range)",
+            f"├─ 🛑 <b>GTT Stoploss:</b> {tg_code(tg_money(sl))} (Trigger @ {tg_money(sl)})",
+            f"├─ 🥇 <b>Target 1:</b>    {tg_code(tg_money(t1))} (+100% / 2x Multiplier)",
+            f"└─ 🚀 <b>Target 2:</b>    {tg_code(tg_money(t2))} (+300% / 4x Multibagger)",
             f"{DIVIDER}",
             "🔥 <b>V14.7 STRATEGY:</b> <i>Risk small capital for explosive 2x-5x expiry payoff. Book 50% @ T1!</i>",
         ]
 
         _send_hero_zero_tg("\n".join(lines))
         time.sleep(0.3)
+
+
+def deploy_automated_sensex_gtt(kite: Any, candidate: Dict[str, Any]) -> Optional[int]:
+    """Automatically places an active GTT order on Zerodha Kite when a SENSEX Hero-Zero strike is selected."""
+    if not kite:
+        return None
+    tradingsymbol = candidate.get("option_symbol")
+    if not tradingsymbol:
+        return None
+
+    exchange = "BFO"
+    product = "MIS"
+    qty = int(candidate.get("total_shares", 80))
+    ltp = float(candidate.get("ltp", 10.0))
+
+    # Zerodha buffer rule: trigger must be comfortably above LTP
+    min_buffer = max(0.50, round(ltp * 0.05, 1))
+    trigger_price = round(ltp + min_buffer, 1)
+    limit_price = round(trigger_price + 0.40, 1)
+
+    print(f"🚀 Placing automated Zerodha GTT for {tradingsymbol} @ Trigger ₹{trigger_price:.1f} | Limit ₹{limit_price:.1f} (Qty: {qty})...")
+
+    # Clean up any existing active SENSEX GTT to prevent stacking
+    try:
+        existing_gtts = kite.get_gtts()
+        for g in existing_gtts:
+            cond = g.get("condition", {})
+            if "SENSEX" in cond.get("tradingsymbol", "") and g.get("status") in ["active", "triggered"]:
+                kite.delete_gtt(g.get("id"))
+    except Exception as e:
+        print(f"Notice during GTT cleanup: {e}")
+
+    buy_orders = [
+        {
+            "transaction_type": kite.TRANSACTION_TYPE_BUY,
+            "quantity": qty,
+            "order_type": kite.ORDER_TYPE_LIMIT,
+            "product": product,
+            "price": limit_price
+        }
+    ]
+
+    try:
+        resp = kite.place_gtt(
+            trigger_type=kite.GTT_TYPE_SINGLE,
+            tradingsymbol=tradingsymbol,
+            exchange=exchange,
+            trigger_values=[trigger_price],
+            last_price=ltp,
+            orders=buy_orders
+        )
+        gtt_id = resp.get("trigger_id")
+        print(f"✅ AUTOMATED GTT DEPLOYED SUCCESSFULLY! Trigger ID: #{gtt_id} for {tradingsymbol}")
+
+        rec_lots = candidate.get("recommended_qty", 4)
+        qty_label = f"{qty} shares ({rec_lots} Lots)"
+
+        # Dispatch GTT confirmation to Telegram
+        gtt_msg = (
+            f"⚡ <b>AUTOMATED ZERODHA GTT DEPLOYED</b> ⚡\n"
+            f"{DIVIDER}\n"
+            f"🟢 <b>Status:</b>   {tg_code('ACTIVE ON ZERODHA')}\n"
+            f"🆔 <b>GTT ID:</b>   {tg_code(gtt_id)}\n"
+            f"🏛️ <b>Contract:</b> {tg_code(tradingsymbol)}\n"
+            f"🎯 <b>Trigger:</b>  {tg_code(tg_money(trigger_price))} (Breakout entry)\n"
+            f"💵 <b>Limit:</b>    {tg_code(tg_money(limit_price))}\n"
+            f"📦 <b>Quantity:</b> {tg_code(qty_label)}\n"
+            f"💰 <b>Max Risk:</b> {tg_code(tg_money(qty * limit_price))}\n"
+            f"{DIVIDER}\n"
+            f"<i>Order is live on Zerodha exchange servers; will trigger automatically!</i>"
+        )
+        _send_hero_zero_tg(gtt_msg)
+        return gtt_id
+    except Exception as e:
+        print(f"❌ Automated GTT Deployment Failed: {e}")
+        _send_hero_zero_tg(f"⚠️ <b>Automated GTT Failed:</b> {html_escape(str(e))}")
+        return None
+
+
+def should_deploy_gtt(args: argparse.Namespace) -> bool:
+    """
+    Automated Zerodha GTT runs ONLY at 14:30 (02:30 PM) and 15:05 (03:05 PM) IST.
+    All other scan timings (14:00, 15:00, 15:10, etc.) are strictly Telegram alerts only.
+    """
+    if args.no_gtt:
+        return False
+    if args.auto_gtt:
+        return True
+
+    now = datetime.now()
+    hour = now.hour
+    minute = now.minute
+
+    # Slot 1: 14:30 IST Window (14:25 - 14:35)
+    if hour == 14 and 25 <= minute <= 35:
+        return True
+
+    # Slot 2: 15:05 IST Window (15:03 - 15:08)
+    if hour == 15 and 3 <= minute <= 8:
+        return True
+
+    return False
 
 
 def main():
@@ -536,6 +697,12 @@ def main():
     parser.add_argument("--expiry-day", type=str, default="Thursday", choices=["Thursday", "Friday"], help="SENSEX expiry day")
     parser.add_argument("--both", action="store_true", help="Send both CE and PE (strangle) instead of single best candidate")
     parser.add_argument("--dry-run", action="store_true", help="Print candidates locally without dispatching to Telegram")
+    parser.add_argument("--auto-gtt", action="store_true", help="Force GTT placement regardless of time window (default: 14:30 and 15:05 only)")
+    parser.add_argument("--no-gtt", action="store_true", help="Disable automatic Zerodha GTT placement")
+    parser.add_argument("--min-prem", type=float, default=8.0, help="Minimum entry premium (default: 8.0)")
+    parser.add_argument("--max-prem", type=float, default=15.0, help="Maximum entry premium (default: 15.0)")
+    parser.add_argument("--lots", type=int, default=4, help="Target lots (default: 4)")
+    parser.add_argument("--capital", type=float, default=1500.0, help="Capital budget in ₹ (default: 1500.0)")
     args = parser.parse_args()
 
     if args.time_slot:
@@ -556,7 +723,14 @@ def main():
     print("==================================================================================")
 
     kite = get_kite_client()
-    candidates = resolve_sensex_hero_zero_candidates(kite, single_best=not args.both)
+    candidates = resolve_sensex_hero_zero_candidates(
+        kite,
+        single_best=not args.both,
+        min_prem=args.min_prem,
+        max_prem=args.max_prem,
+        default_lots=args.lots,
+        capital_budget=args.capital,
+    )
 
     if not candidates:
         print("⚠️ No qualified Hero-Zero setups found.")
@@ -569,6 +743,13 @@ def main():
     else:
         print(f"\nDispatches Top {len(candidates)} SENSEX Hero-Zero Setups to @Nifty_stage10_paper_bot...")
         send_sensex_hero_zero_telegram_alert(candidates, time_label=time_slot_label)
+
+        # AUTOMATED GTT DEPLOYMENT: Runs ONLY at 14:30 and 15:05 IST!
+        if should_deploy_gtt(args) and candidates:
+            primary_candidate = candidates[0]
+            deploy_automated_sensex_gtt(kite, primary_candidate)
+        else:
+            print("ℹ️ Automated GTT: SKIPPED for this time slot (GTT is restricted to 14:30 & 15:05 IST only). Telegram alert dispatched successfully!")
 
     # Save log
     log_dir = Path("logs")

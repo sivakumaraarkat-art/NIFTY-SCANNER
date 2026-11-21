@@ -1,0 +1,125 @@
+{
+  "timestamp": "2026-11-08T17:07:56.532916",
+  "quotes": {
+    "NSE:HDFCBANK": {
+      "ltp": 784.1,
+      "ohlc": {
+        "open": 788.9,
+        "high": 795,
+        "low": 782.55,
+        "close": 788.25
+      },
+      "volume": 7207078
+    },
+    "NSE:ICICIBANK": {
+      "ltp": 1565,
+      "ohlc": {
+        "open": 1572,
+        "high": 1577.8,
+        "low": 1564,
+        "close": 1571.2
+      },
+      "volume": 1999869
+    },
+    "NSE:INDIA VIX": {
+      "ltp": 18.43,
+      "ohlc": {
+        "open": 17.47,
+        "high": 18.54,
+        "low": 15.85,
+        "close": 17.47
+      },
+      "volume": null
+    },
+    "NSE:INFY": {
+      "ltp": 1171.6,
+      "ohlc": {
+        "open": 1176,
+        "high": 1180.5,
+        "low": 1171.6,
+        "close": 1181.4
+      },
+      "volume": 1003958
+    },
+    "NSE:ITC": {
+      "ltp": 283.45,
+      "ohlc": {
+        "open": 283.55,
+        "high": 284.25,
+        "low": 282.7,
+        "close": 283.15
+      },
+      "volume": 2941827
+    },
+    "NSE:LT": {
+      "ltp": 4110,
+      "ohlc": {
+        "open": 4119,
+        "high": 4130,
+        "low": 4096.1,
+        "close": 4117.7
+      },
+      "volume": 311194
+    },
+    "NSE:NIFTY 50": {
+      "ltp": 24986.4,
+      "ohlc": {
+        "open": 25070.45,
+        "high": 25131.85,
+        "low": 24985.3,
+        "close": 25030.35
+      },
+      "volume": null
+    },
+    "NSE:NIFTY BANK": {
+      "ltp": 58850.65,
+      "ohlc": {
+        "open": 59240.5,
+        "high": 59244.05,
+        "low": 58791.35,
+        "close": 59086
+      },
+      "volume": null
+    },
+    "NSE:NIFTY IT": {
+      "ltp": 32869.7,
+      "ohlc": {
+        "open": 32955.1,
+        "high": 33070.55,
+        "low": 32863.25,
+        "close": 32869.65
+      },
+      "volume": null
+    },
+    "NSE:RELIANCE": {
+      "ltp": 1324,
+      "ohlc": {
+        "open": 1322.1,
+        "high": 1324.9,
+        "low": 1314.7,
+        "close": 1320
+      },
+      "volume": 4174389
+    },
+    "NSE:SBIN": {
+      "ltp": 1016,
+      "ohlc": {
+        "open": 1023.2,
+        "high": 1025,
+        "low": 1015.1,
+        "close": 1018.5
+      },
+      "volume": 1950983
+    },
+    "NSE:TCS": {
+      "ltp": 2498.8,
+      "ohlc": {
+        "open": 2503.9,
+        "high": 2513.9,
+        "low": 2492,
+        "close": 2498.5
+      },
+      "volume": 301811
+    }
+  }
+}

@@ -1,0 +1,972 @@
+// This Pine Script code is subject to the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+//@version=6
+strategy("MCX Crude Trend Pullback Research", shorttitle="Crude Pullback", overlay=true, max_labels_count=500, max_lines_count=500, dynamic_requests=true, behind_chart=false, pyramiding=0, process_orders_on_close=true, initial_capital=1000000, currency=currency.INR, commission_type=strategy.commission.cash_per_order, commission_value=20, slippage=1)
+
+// Backtest copy for a standard MCX Crude Oil futures 5-minute chart.
+// Signals and trade-state changes are confirmed at candle close.
+// Strategy Tester results use one contract, ₹20 per order, and one tick of slippage.
+// When stop/target order is ambiguous, the stop wins.
+// Breakeven changes become effective on the NEXT candle.
+// Option levels are references; futures exits are tracked.
+
+string TZ = "Asia/Kolkata"
+
+btStart = input.time(timestamp("10 Nov 2025 00:00 +0530"), "Backtest start (IST)", group="Backtest")
+btEnd = input.time(timestamp("11 Nov 2026 00:00 +0530"), "Backtest end (IST)", group="Backtest")
+
+// ─────────────────────────────────────────────────────────────
+// SIGNAL SETTINGS
+// ─────────────────────────────────────────────────────────────
+grpSig = "1. Confirmed Signals"
+
+grpResearch = "Research Filters"
+trendTf = input.timeframe("15", "Higher-Timeframe Trend", group=grpResearch)
+minResearchAdx = input.float(20.0, "Minimum ADX", minval=5.0, maxval=50.0, step=0.5, group=grpResearch)
+pullbackLookback = input.int(6, "Recent VWAP / EMA20 Pullback (bars)", minval=1, maxval=20, group=grpResearch)
+
+signalStyle = input.string("Confirmed Trend Only (Supertrend + Price Filter + EMA)", "Signal Mode", options=["Early Predictive (Supertrend + Price Filter + Reversal)", "Confirmed Trend Only (Supertrend + Price Filter + EMA)", "Opening Range Breakout (ORB Only)"], group=grpSig, display=display.none)
+stFactor = input.float(2.0, "Supertrend Sensitivity", minval=1.0, maxval=5.0, step=0.1, group=grpSig, display=display.none)
+stLen = input.int(10, "Supertrend ATR Length", minval=5, maxval=30, group=grpSig, display=display.none)
+enableReversals = input.bool(false, "Enable Early Reversal Setups (confirmed at close)", group=grpSig)
+allowPositionReversals = input.bool(false, "Allow Position Reversals", group=grpSig, tooltip="When disabled, opposite signals cannot replace an active trade. Stops, targets and square-off still work.")
+queueBlockedSetups = input.bool(true, "Remember Setups Blocked by Cooldown or Exit", group=grpSig)
+setupExpiryBars = input.int(3, "Pending Setup Lifetime (bars)", minval=1, maxval=50, group=grpSig, tooltip="Pending setups expire when their continuation conditions fail, their lifetime ends, or the entry window closes.")
+checkWindowOpen = input.bool(true, "Check Existing Trend When Entry Window Opens", group=grpSig, tooltip="Checks the first eligible candle at its close without bypassing trend filters.")
+showOutcomeTags = input.bool(true, "Show TP, SL, Reversal and Session Exit Markers", group=grpSig)
+trailToBE = input.bool(true, "Move Stop to Entry After TP1 (effective next bar)", group=grpSig)
+minBarsBetween = input.int(6, "Minimum Bars Between ALL Entries (including reversals)", minval=1, maxval=50, group=grpSig, display=display.none)
+reenterAfterTP2 = input.bool(true, "Fresh Trend Entry After TP2", group=grpSig, tooltip="Re-enter in the same direction on a later confirmed candle while full trend filters remain valid. Respects entry cooldown and session. Disabled in ORB Only mode. Cancels if the trend fails before entry.")
+reentryWaitBars = input.int(1, "Minimum Bars After TP2", minval=1, maxval=50, group=grpSig)
+slCooldownBars = input.int(6, "Bars After Losing Stop Exit", minval=0, maxval=100, group=grpSig, tooltip="Six means the earliest new entry is at the sixth later candle close. Applies to all entries; breakeven exits do not start this timer.")
+sellAfterStop = input.bool(true, "5m Pullback Sell After Losing Short Stop", group=grpSig, tooltip="On 5m charts outside ORB Only mode, short re-entry after a losing short stop requires an EMA9 pullback at or after the stop cooldown, then a later bearish close below EMA9 and the previous low with full bear trend filters. Ordinary short setups cannot bypass this wait. Another entry or the end of the entry window cancels it.")
+reentryMode = input.string("Pullback then recovery", "TP2 Re-entry Confirmation", options=["Pullback then recovery", "Fresh breakout"], group=grpSig)
+reentryBreakoutBars = input.int(5, "Re-entry Breakout Lookback", minval=2, maxval=50, group=grpSig)
+useSpikeFilter = input.bool(true, "Filter Large Candles / Extended Entries", group=grpSig)
+maxEntryTR = input.float(2.0, "Maximum Entry True Range / Prior ATR", minval=0.5, step=0.1, group=grpSig)
+maxEntryExtension = input.float(1.5, "Maximum Entry Distance From EMA9 / Prior ATR", minval=0.1, step=0.1, group=grpSig)
+
+
+// ─────────────────────────────────────────────────────────────
+// OPTIONAL PROJECTION
+// ─────────────────────────────────────────────────────────────
+grpPred = "2. Momentum Projection"
+
+showFutureCandles = input.bool(false, "Show Projected Candles (illustrative)", group=grpPred)
+numFutureBars = input.int(5, "Projection Horizon", minval=2, maxval=10, group=grpPred, display=display.none)
+showProjChannel = input.bool(false, "Show ATR Scenario Range (not a confidence interval)", group=grpPred)
+predLookback = input.int(14, "Regression & Momentum Lookback", minval=5, maxval=50, group=grpPred, display=display.none)
+
+// ─────────────────────────────────────────────────────────────
+// RISK AND SESSION SETTINGS
+// ─────────────────────────────────────────────────────────────
+grpLvl = "3. Risk, Sessions & Levels"
+
+atrMultSL = input.float(1.4, "Futures ATR Stop Multiplier", minval=0.5, step=0.1, group=grpLvl, display=display.none)
+rrRatio1 = input.float(1.0, "TP1 Risk/Reward (moves SL to BE)", minval=0.5, step=0.1, group=grpLvl, display=display.none)
+rrRatio2 = input.float(2.0, "TP2 Risk/Reward (must exceed TP1)", minval=1.0, step=0.1, group=grpLvl, display=display.none)
+orbSession = input.session("0900-0915", "Opening Range (IST; align with chart bars)", group=grpLvl, display=display.none)
+tradeSession = input.session("0915-2300", "Entry Window (IST)", group=grpLvl, display=display.none)
+exitHour = input.int(23, "Square-off Hour IST", minval=9, maxval=23, group=grpLvl, inline="exit")
+exitMinute = input.int(20, "Minute", minval=0, maxval=59, group=grpLvl, inline="exit", tooltip="Exit at the first confirmed chart-bar close at or after this time.")
+filterMode = input.string("VWAP (required)", "Price Filter", options=["VWAP (required)", "EMA20 (explicit alternative)"], group=grpLvl, tooltip="Choose EMA20 deliberately if this feed has no usable volume. This changes the signal logic.")
+showVWAP = input.bool(true, "Plot Selected Price Filter", group=grpLvl)
+showORB = input.bool(true, "Plot ORB (latest day)", group=grpLvl)
+showCPR = input.bool(true, "Plot CPR & R1/S1 (latest day)", group=grpLvl)
+showHUD = input.bool(true, "Show Futures Dashboard", group=grpLvl)
+
+// ─────────────────────────────────────────────────────────────
+// COMPACT APPEARANCE
+// ─────────────────────────────────────────────────────────────
+grpUI = "5. Dashboard & Label Appearance"
+
+dashText = input.int(12, "Dashboard Text Size", minval=10, maxval=28, group=grpUI)
+dashValues = input.int(13, "Dashboard Value Size", minval=10, maxval=32, group=grpUI)
+dashHeading = input.int(14, "Dashboard Heading Size", minval=12, maxval=32, group=grpUI)
+labelText = input.int(12, "Signal Label Text Size", minval=10, maxval=28, group=grpUI)
+labelGap = input.float(2.0, "Option Label Distance (ATR)", minval=0.5, maxval=6.0, step=0.25, group=grpUI)
+dashSide = input.string("Top Right", "Dashboard Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=grpUI)
+dashWidth = input.int(25, "Dashboard Width (% of chart)", minval=15, maxval=40, group=grpUI)
+showLevelTags = input.bool(true, "Show Entry / SL / TP Price Tags", group=grpUI)
+signalGap = input.float(0.6, "Futures Signal Label Distance (ATR)", minval=0.0, maxval=3.0, step=0.1, group=grpUI)
+
+string panelPosition = switch dashSide
+    "Top Left" => position.top_left
+    "Bottom Right" => position.bottom_right
+    "Bottom Left" => position.bottom_left
+    => position.top_right
+
+color uiBlue = #1649CC
+color uiWhite = #F5F7FB
+color uiInk = #111827
+color uiGreen = #DDF7DE
+color uiRed = #FFE3E3
+color uiYellow = #FFF0A6
+color uiBorder = #3C4656
+color uiLightBlue = #BCD7FA
+color uiBuy = #176B19
+color uiSell = #AF1717
+
+f_row(table t, int row, string key, string value, color bg, color ink, bool heading) =>
+    table.cell(t, 0, row, key, width=dashWidth * 0.54, bgcolor=heading ? bg : uiWhite, text_color=heading ? ink : uiInk, text_size=heading ? dashHeading : dashText, text_halign=text.align_left, text_formatting=text.format_bold)
+    table.cell(t, 1, row, value, width=dashWidth * 0.46, bgcolor=bg, text_color=ink, text_size=heading ? dashHeading : dashValues, text_halign=text.align_left, text_formatting=text.format_bold)
+
+// ─────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────
+f_sessionMinute(string sess, bool endTime) =>
+    int pos = endTime ? 5 : 0
+    int(str.tonumber(str.substring(sess, pos, pos + 2))) * 60 + int(str.tonumber(str.substring(sess, pos + 2, pos + 4)))
+
+f_today(int minuteOfDay) =>
+    timestamp(TZ, year(time, TZ), month(time, TZ), dayofmonth(time, TZ), int(minuteOfDay / 60), minuteOfDay % 60)
+
+f_price(float value) =>
+    na(value) ? "-" : str.tostring(value, format.mintick)
+
+f_tag(float price, string txt, color col, bool above) =>
+    label.new(bar_index, price, txt, color=col, textcolor=color.white, style=above ? label.style_label_down : label.style_label_up, size=labelText, text_formatting=text.format_bold)
+
+int orbStartMinute = f_sessionMinute(orbSession, false)
+int orbEndMinute = f_sessionMinute(orbSession, true)
+int entryStartMinute = f_sessionMinute(tradeSession, false)
+int entryEndMinute = f_sessionMinute(tradeSession, true)
+
+// ─────────────────────────────────────────────────────────────
+// VALIDATION
+// ─────────────────────────────────────────────────────────────
+if barstate.isfirst
+    if not chart.is_standard or syminfo.prefix != "MCX" or syminfo.type != "futures" or not str.contains(syminfo.ticker, "CRUDEOIL")
+        runtime.error("Use an MCX CRUDEOIL futures chart with standard candles. Match optional CE/PE contracts to the underlying futures expiry.")
+
+    if not timeframe.isminutes or timeframe.multiplier != 5
+        runtime.error("Use a standard MCX crude futures 5-minute chart for this research variant.")
+
+    if timeframe.in_seconds(trendTf) <= timeframe.in_seconds()
+        runtime.error("Higher-Timeframe Trend must be greater than the chart timeframe.")
+
+    if str.length(orbSession) != 9 or str.length(tradeSession) != 9 or orbStartMinute >= orbEndMinute or entryStartMinute >= entryEndMinute
+        runtime.error("Use single same-day HHMM-HHMM sessions; overnight sessions are not supported.")
+
+    if orbStartMinute < 540 or orbEndMinute > 1435 or entryStartMinute < 540 or entryEndMinute > 1435
+        runtime.error("Opening range and entry window must be within 09:00-23:55 IST; respect the actual exchange session.")
+
+    if entryEndMinute > exitHour * 60 + exitMinute
+        runtime.error("Entry window must end at or before square-off.")
+
+    if rrRatio2 <= rrRatio1
+        runtime.error("TP2 risk/reward must be greater than TP1.")
+
+    if exitHour * 60 + exitMinute <= 9 * 60 or exitHour * 60 + exitMinute > 23 * 60 + 55
+        runtime.error("Square-off must be after 09:00 and no later than 23:55 IST. Choose a time before the actual session close.")
+
+// ─────────────────────────────────────────────────────────────
+// INDICATOR CALCULATIONS
+// ─────────────────────────────────────────────────────────────
+float ema9 = ta.ema(close, 9)
+float ema20 = ta.ema(close, 20)
+float vwapVal = ta.vwap(hlc3)
+bool useVwap = filterMode == "VWAP (required)"
+float filterVal = useVwap ? vwapVal : ema20
+float rsiVal = ta.rsi(close, 14)
+[macdLine, signalLine, histLine] = ta.macd(close, 12, 26, 9)
+float atrVal = ta.atr(14)
+[diPlus, diMinus, adxVal] = ta.dmi(14, 14)
+[stVal, stDir] = ta.supertrend(stFactor, stLen)
+[confirmedTrendClose, confirmedTrendEma20, confirmedTrendEma50] = request.security(syminfo.tickerid, trendTf, [close[1], ta.ema(close, 20)[1], ta.ema(close, 50)[1]], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+bool higherBullTrend = confirmedTrendClose > confirmedTrendEma20 and confirmedTrendEma20 > confirmedTrendEma50
+bool higherBearTrend = confirmedTrendClose < confirmedTrendEma20 and confirmedTrendEma20 < confirmedTrendEma50
+
+bool stBull = stDir < 0
+bool stBear = stDir > 0
+float entryATRBase = atrVal[1]
+bool spikeOk = not useSpikeFilter or (not na(entryATRBase) and entryATRBase > 0 and ta.tr(true) <= entryATRBase * maxEntryTR and math.abs(close - ema9) <= entryATRBase * maxEntryExtension)
+float reentryPriorHigh = ta.highest(high[1], reentryBreakoutBars)
+float reentryPriorLow = ta.lowest(low[1], reentryBreakoutBars)
+bool dataReady = not na(filterVal) and not na(atrVal) and not na(adxVal) and not na(rsiVal) and not na(stVal) and not na(histLine[1]) and not na(confirmedTrendClose) and not na(confirmedTrendEma50)
+
+int istDay = year(time, TZ) * 10000 + month(time, TZ) * 100 + dayofmonth(time, TZ)
+bool isNewDay = barstate.isfirst or istDay != istDay[1]
+bool isLatestDay = year(time, TZ) == year(last_bar_time, TZ) and month(time, TZ) == month(last_bar_time, TZ) and dayofmonth(time, TZ) == dayofmonth(last_bar_time, TZ)
+
+int squareOffTime = timestamp(TZ, year(time, TZ), month(time, TZ), dayofmonth(time, TZ), exitHour, exitMinute)
+bool cutoffReached = time_close >= squareOffTime
+int orbStartTime = f_today(orbStartMinute)
+int orbEndTime = f_today(orbEndMinute)
+int entryStartTime = f_today(entryStartMinute)
+int entryEndTime = f_today(entryEndMinute)
+
+bool overlapsOrb = time < orbEndTime and time_close > orbStartTime
+bool inOrbSession = time >= orbStartTime and time_close <= orbEndTime
+
+if overlapsOrb and not inOrbSession
+    runtime.error("Opening-range boundaries cut through a chart candle. Align both boundaries to chart bars or select a smaller timeframe.")
+
+bool inTradeSession = time >= entryStartTime and time < entryEndTime and time_close <= entryEndTime
+
+// Previous completed daily values.
+[prevHigh, prevLow, prevClose] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
+
+float pivot = (prevHigh + prevLow + prevClose) / 3.0
+float bc = (prevHigh + prevLow) / 2.0
+float tc = 2.0 * pivot - bc
+float cprTop = math.max(tc, bc)
+float cprBot = math.min(tc, bc)
+float r1 = 2.0 * pivot - prevLow
+float s1 = 2.0 * pivot - prevHigh
+
+// ─────────────────────────────────────────────────────────────
+// OPENING RANGE
+// ─────────────────────────────────────────────────────────────
+var float orbHigh = na
+var float orbLow = na
+var bool orbStarted = false
+var bool orbComplete = false
+var int orbLastClose = na
+var bool orbTradedLong = false
+var bool orbTradedShort = false
+
+if isNewDay
+    orbStarted := false
+    orbComplete := false
+    orbLastClose := na
+    orbHigh := na
+    orbLow := na
+    orbTradedLong := false
+    orbTradedShort := false
+
+if inOrbSession and barstate.isconfirmed
+    if time == orbStartTime
+        orbStarted := true
+    else if na(orbLastClose) or time != orbLastClose
+        orbStarted := false
+
+    orbLastClose := time_close
+    orbComplete := orbStarted and time_close == orbEndTime
+    orbHigh := na(orbHigh) ? high : math.max(orbHigh, high)
+    orbLow := na(orbLow) ? low : math.min(orbLow, low)
+
+bool afterOrb = time >= orbEndTime and orbComplete and not na(orbHigh) and not na(orbLow)
+
+// Evaluate these functions on every candle.
+bool crossedOrbHigh = ta.crossover(close, orbHigh)
+bool crossedOrbLow = ta.crossunder(close, orbLow)
+bool crossedFilter = ta.cross(close, filterVal)
+float filterCrossCum = ta.cum(crossedFilter ? 1.0 : 0.0)
+int filterCrosses10 = int(math.round(filterCrossCum - nz(filterCrossCum[10])))
+
+bool notFlatVwapChop = math.abs(close - filterVal) >= atrVal * 0.35 and filterCrosses10 <= 1
+bool coreBullTrend = stBull and close > filterVal
+bool coreBearTrend = stBear and close < filterVal
+bool bullTrendState = coreBullTrend and ema9 > ema20 and rsiVal >= 53 and diPlus > diMinus and notFlatVwapChop and adxVal >= minResearchAdx and higherBullTrend
+bool bearTrendState = coreBearTrend and ema9 < ema20 and rsiVal <= 47 and diMinus > diPlus and notFlatVwapChop and adxVal >= minResearchAdx and higherBearTrend
+bool bullCandleConfirm = close > open and close >= ema9
+bool bearCandleConfirm = close < open and close <= ema9
+bool recentLongPullback = ta.barssince(low <= ema20 or low <= vwapVal) <= pullbackLookback
+bool recentShortPullback = ta.barssince(high >= ema20 or high >= vwapVal) <= pullbackLookback
+bool longPullbackConfirm = recentLongPullback and bullCandleConfirm and close > filterVal and close > high[1]
+bool shortPullbackConfirm = recentShortPullback and bearCandleConfirm and close < filterVal and close < low[1]
+
+bool entryWindowOpened = inTradeSession and (isNewDay or not inTradeSession[1])
+var bool bullTrendLatched = false
+var bool bearTrendLatched = false
+if isNewDay or not inTradeSession
+    bullTrendLatched := false
+    bearTrendLatched := false
+else if entryWindowOpened and not checkWindowOpen
+    bullTrendLatched := coreBullTrend
+    bearTrendLatched := coreBearTrend
+if not coreBullTrend
+    bullTrendLatched := false
+if not coreBearTrend
+    bearTrendLatched := false
+
+bool bullStateTrigger = bullTrendState and bullCandleConfirm and not bullTrendLatched
+bool bearStateTrigger = bearTrendState and bearCandleConfirm and not bearTrendLatched
+
+bool orbLong = afterOrb and crossedOrbHigh and close > open and close > filterVal and rsiVal > 52 and not orbTradedLong
+bool orbShort = afterOrb and crossedOrbLow and close < open and close < filterVal and rsiVal < 48 and not orbTradedShort
+
+float swingLow5 = ta.lowest(low[1], 5)
+float swingHigh5 = ta.highest(high[1], 5)
+
+bool earlyBullRev = enableReversals and close > filterVal and (low <= swingLow5 or rsiVal[1] < 38) and close > open and close > high[1] and close > ema9 and rsiVal - rsiVal[1] >= 4.0 and histLine > histLine[1]
+bool earlyBearRev = enableReversals and close < filterVal and (high >= swingHigh5 or rsiVal[1] > 62) and close < open and close < low[1] and close < ema9 and rsiVal[1] - rsiVal >= 4.0 and histLine < histLine[1]
+
+bool baseBuy = switch signalStyle
+    "Opening Range Breakout (ORB Only)" => orbLong
+    "Confirmed Trend Only (Supertrend + Price Filter + EMA)" => bullStateTrigger or (orbLong and bullTrendState)
+    => bullStateTrigger or orbLong or (earlyBullRev and stBull)
+
+bool baseSell = switch signalStyle
+    "Opening Range Breakout (ORB Only)" => orbShort
+    "Confirmed Trend Only (Supertrend + Price Filter + EMA)" => bearStateTrigger or (orbShort and bearTrendState)
+    => bearStateTrigger or orbShort or (earlyBearRev and stBear)
+
+bool rawBuy = baseBuy and longPullbackConfirm and higherBullTrend and adxVal >= minResearchAdx
+bool rawSell = baseSell and shortPullbackConfirm and higherBearTrend and adxVal >= minResearchAdx
+
+// ─────────────────────────────────────────────────────────────
+// FUTURES TRADE STATE
+// ─────────────────────────────────────────────────────────────
+// Pending source: 1 = trend, 2 = ORB, 3 = early reversal.
+var int pendingDir = 0
+var int pendingSource = 0
+var int pendingBar = na
+var float pendingInvalidation = na
+
+var int tradeDir = 0
+var int lastSigBar = na
+var float activeEntry = na
+var float activeSL = na
+var float activeTP1 = na
+var float activeTP2 = na
+var int activeBarIdx = na
+var bool tp1Reached = false
+var string lastExit = "NONE"
+var int continuationDir = 0
+var int continuationExitBar = na
+var int lastLosingStopBar = na
+var bool waitingForStopSell = false
+var int stopSellTouchBar = na
+var int continuationPullbackBar = na
+var float continuationExitExtreme = na
+
+bool exitEvent = false
+bool tp1Event = false
+bool tp2Event = false
+bool finalBuy = false
+bool finalSell = false
+bool continuationEntry = false
+bool stopSellEntry = false
+
+if barstate.isconfirmed
+    // Fallback if previous-session closing candles were missing.
+    if isNewDay
+        lastLosingStopBar := na
+        waitingForStopSell := false
+        stopSellTouchBar := na
+        continuationDir := 0
+        continuationExitBar := na
+        continuationPullbackBar := na
+        continuationExitExtreme := na
+        pendingDir := 0
+        pendingSource := 0
+        pendingBar := na
+        pendingInvalidation := na
+
+        if tradeDir != 0
+            lastExit := "SESSION RESET @ " + f_price(close[1])
+            if showOutcomeTags
+                f_tag(open, lastExit, color.gray, tradeDir == 1)
+            exitEvent := true
+
+        tradeDir := 0
+        activeEntry := na
+        activeSL := na
+        activeTP1 := na
+        activeTP2 := na
+        activeBarIdx := na
+        tp1Reached := false
+        lastSigBar := na
+
+    if tradeDir != 0 and bar_index > activeBarIdx
+        bool longTrade = tradeDir == 1
+        bool stopGap = longTrade ? open <= activeSL : open >= activeSL
+        bool tp1Gap = longTrade ? open >= activeTP1 : open <= activeTP1
+        bool tp2Gap = longTrade ? open >= activeTP2 : open <= activeTP2
+        bool stopTouched = longTrade ? low <= activeSL : high >= activeSL
+        bool tp1Touched = longTrade ? high >= activeTP1 : low <= activeTP1
+        bool tp2Touched = longTrade ? high >= activeTP2 : low <= activeTP2
+
+        float exitPrice = na
+        string exitReason = ""
+
+        // The candle open occurs before its remaining high/low range.
+        bool isBEStop = math.abs(activeSL - activeEntry) < syminfo.mintick * 0.5
+        if not stopGap and not tp1Reached and tp1Gap
+            tp1Reached := true
+            tp1Event := true
+
+        if stopGap
+            exitPrice := open
+            exitReason := isBEStop ? "BE EXIT (GAP)" : "SL EXIT (GAP)"
+        else if tp2Gap
+            exitPrice := activeTP2
+            exitReason := "TP2 HIT"
+            tp2Event := true
+        else if stopTouched
+            exitPrice := activeSL
+            exitReason := isBEStop ? "BE EXIT" : "SL EXIT"
+            if tp2Touched or (tp1Touched and not tp1Reached)
+                exitReason := exitReason + " (AMBIGUOUS: STOP FIRST)"
+        else
+            if not tp1Reached and tp1Touched
+                tp1Reached := true
+                tp1Event := true
+
+            if tp2Touched
+                exitPrice := activeTP2
+                exitReason := "TP2 HIT"
+                tp2Event := true
+
+        if na(exitPrice) and cutoffReached
+            exitPrice := close
+            exitReason := "TIME EXIT"
+
+        if tp1Event and showOutcomeTags
+            f_tag(activeTP1, "FUTURES TP1 touched", color.new(#00bfa5, 15), longTrade)
+
+        if not na(exitPrice)
+            if str.startswith(exitReason, "SL EXIT") and (exitPrice - activeEntry) * tradeDir < -syminfo.mintick * 0.5
+                lastLosingStopBar := bar_index
+                waitingForStopSell := sellAfterStop and timeframe.isminutes and timeframe.multiplier == 5 and tradeDir == -1 and signalStyle != "Opening Range Breakout (ORB Only)"
+                stopSellTouchBar := na
+            // Preserve the exiting direction before clearing the tracked trade.
+            continuationDir := tp2Event and reenterAfterTP2 and signalStyle != "Opening Range Breakout (ORB Only)" ? tradeDir : 0
+            continuationExitBar := continuationDir != 0 ? bar_index : na
+            continuationPullbackBar := na
+            continuationExitExtreme := continuationDir == 1 ? high : continuationDir == -1 ? low : na
+            lastExit := exitReason + " @ " + f_price(exitPrice)
+
+            if showOutcomeTags
+                f_tag(exitPrice, lastExit, tp2Event ? color.new(#00c853, 5) : color.new(#d50000, 10), longTrade)
+
+            exitEvent := true
+            tradeDir := 0
+            activeEntry := na
+            activeSL := na
+            activeTP1 := na
+            activeTP2 := na
+            activeBarIdx := na
+            tp1Reached := false
+
+        else if tp1Reached and trailToBE
+            // Updated after checking this candle against the old stop.
+            activeSL := activeEntry
+
+    bool eligibleWindow = dataReady and inTradeSession and not cutoffReached and time >= btStart and time < btEnd
+    bool continuationTrend = continuationDir == 1 ? bullTrendState : continuationDir == -1 ? bearTrendState : false
+    if not reenterAfterTP2 or signalStyle == "Opening Range Breakout (ORB Only)" or not eligibleWindow or not continuationTrend
+        continuationDir := 0
+        continuationExitBar := na
+        continuationPullbackBar := na
+        continuationExitExtreme := na
+
+    bool pendingValid = switch pendingSource
+        1 => pendingDir == 1 ? bullTrendState : bearTrendState
+        2 => afterOrb and (pendingDir == 1 ? close > orbHigh and close > filterVal and rsiVal > 52 and not orbTradedLong : close < orbLow and close < filterVal and rsiVal < 48 and not orbTradedShort) and (signalStyle != "Confirmed Trend Only (Supertrend + Price Filter + EMA)" or (pendingDir == 1 ? bullTrendState : bearTrendState))
+        3 => enableReversals and (pendingDir == 1 ? stBull and close > filterVal and close > ema9 and close > pendingInvalidation : stBear and close < filterVal and close < ema9 and close < pendingInvalidation)
+        => false
+
+    if not queueBlockedSetups or not eligibleWindow or not pendingValid or (not na(pendingBar) and bar_index - pendingBar > setupExpiryBars)
+        pendingDir := 0
+        pendingSource := 0
+        pendingBar := na
+        pendingInvalidation := na
+
+    if rawBuy and rawSell
+        pendingDir := 0
+        pendingSource := 0
+        pendingBar := na
+
+    else if eligibleWindow and (rawBuy or rawSell)
+        int signalDir = rawBuy ? 1 : -1
+
+        if pendingDir != signalDir
+            pendingDir := 0
+            pendingSource := 0
+            pendingBar := na
+            pendingInvalidation := na
+
+        bool acceptSetup = tradeDir == 0 or (allowPositionReversals and tradeDir != signalDir)
+
+        if acceptSetup
+            pendingDir := signalDir
+            pendingSource := signalStyle == "Opening Range Breakout (ORB Only)" ? 2 : (rawBuy ? bullStateTrigger : bearStateTrigger) ? 1 : (rawBuy ? orbLong : orbShort) ? 2 : 3
+            pendingBar := bar_index
+            pendingInvalidation := rawBuy ? low : high
+
+    // A post-TP2 pullback must close before the later recovery candle.
+    if continuationDir != 0 and bar_index > continuationExitBar and na(continuationPullbackBar)
+        bool touchedEMA = continuationDir == 1 ? low <= ema9 : high >= ema9
+        if touchedEMA
+            continuationPullbackBar := bar_index
+    bool recoveryOk = not na(continuationPullbackBar) and bar_index > continuationPullbackBar and (continuationDir == 1 ? close > high[1] and close > ema9 and close > open : close < low[1] and close < ema9 and close < open)
+    bool breakoutOk = continuationDir == 1 ? close > reentryPriorHigh and close > continuationExitExtreme : continuationDir == -1 ? close < reentryPriorLow and close < continuationExitExtreme : false
+    bool continuationConfirmed = reentryMode == "Pullback then recovery" ? recoveryOk : breakoutOk
+    bool continuationPullbackConfirm = continuationDir == 1 ? longPullbackConfirm : continuationDir == -1 ? shortPullbackConfirm : false
+    bool stopCooldownOk = na(lastLosingStopBar) or bar_index - lastLosingStopBar >= slCooldownBars
+    bool cooldownOk = na(lastSigBar) or bar_index - lastSigBar >= minBarsBetween
+    bool canEnter = eligibleWindow and cooldownOk and stopCooldownOk and spikeOk and not exitEvent
+
+    if waitingForStopSell
+        if not eligibleWindow
+            waitingForStopSell := false
+            stopSellTouchBar := na
+        else if stopCooldownOk and not exitEvent and na(stopSellTouchBar) and high >= ema9
+            stopSellTouchBar := bar_index
+
+    // Normal setups retain priority. This latch survives cooldown, but not a
+    // confirmed trend failure, session end, day change, or another entry.
+    bool entryDirectionConfirm = pendingDir == 1 ? bullCandleConfirm : pendingDir == -1 ? bearCandleConfirm : false
+    bool continuationReady = canEnter and continuationConfirmed and continuationPullbackConfirm and tradeDir == 0 and (pendingDir == 0 or pendingDir == continuationDir) and continuationDir != 0 and not na(continuationExitBar) and bar_index - continuationExitBar >= reentryWaitBars and not (rawBuy and rawSell)
+
+    finalBuy := canEnter and continuationDir != 1 and pendingDir == 1 and entryDirectionConfirm and longPullbackConfirm and not (rawBuy and rawSell) and (tradeDir == 0 or (allowPositionReversals and tradeDir == -1))
+    finalSell := canEnter and continuationDir != -1 and pendingDir == -1 and entryDirectionConfirm and shortPullbackConfirm and not waitingForStopSell and not (rawBuy and rawSell) and (tradeDir == 0 or (allowPositionReversals and tradeDir == 1))
+    if continuationReady
+        finalBuy := continuationDir == 1
+        finalSell := continuationDir == -1
+        continuationEntry := true
+
+    if waitingForStopSell and not na(stopSellTouchBar) and bar_index > stopSellTouchBar
+        bool recoverySell = bearTrendState and shortPullbackConfirm and close < open and close < ema9 and close < low[1]
+        if recoverySell and canEnter and tradeDir == 0 and (pendingDir == 0 or pendingDir == -1) and not rawBuy and not finalBuy and not finalSell
+            finalSell := true
+            stopSellEntry := true
+
+    if finalBuy or finalSell
+        waitingForStopSell := false
+        stopSellTouchBar := na
+        continuationDir := 0
+        continuationExitBar := na
+        continuationPullbackBar := na
+        continuationExitExtreme := na
+        if tradeDir != 0
+            lastExit := "REVERSAL EXIT @ " + f_price(close)
+            if showOutcomeTags
+                f_tag(close, lastExit, color.orange, tradeDir == 1)
+            exitEvent := true
+
+        tradeDir := finalBuy ? 1 : -1
+        if finalBuy
+            bullTrendLatched := true
+        if finalSell
+            bearTrendLatched := true
+        lastSigBar := bar_index
+        activeBarIdx := bar_index
+        activeEntry := close
+
+        float riskPts = math.max(atrVal * atrMultSL, syminfo.mintick)
+        activeSL := math.round_to_mintick(close - tradeDir * riskPts)
+
+        float actualRisk = math.abs(close - activeSL)
+        activeTP1 := math.round_to_mintick(close + tradeDir * math.max(actualRisk * rrRatio1, syminfo.mintick))
+        activeTP2 := math.round_to_mintick(close + tradeDir * math.max(actualRisk * rrRatio2, math.abs(activeTP1 - close) + syminfo.mintick))
+
+        tp1Reached := false
+
+        if finalBuy and (orbLong or pendingSource == 2)
+            orbTradedLong := true
+
+        if finalSell and (orbShort or pendingSource == 2)
+            orbTradedShort := true
+
+        pendingDir := 0
+        pendingSource := 0
+        pendingBar := na
+        pendingInvalidation := na
+
+// ─────────────────────────────────────────────────────────────
+// Strategy Tester orders mirror the indicator confirmed-close entries and
+// its tracked SL/TP2 levels. TP1 only moves the stop to breakeven; no partial exit.
+if finalBuy
+    strategy.entry("Long", strategy.long, qty=1, comment="Confirmed BUY")
+if finalSell
+    strategy.entry("Short", strategy.short, qty=1, comment="Confirmed SELL")
+if exitEvent
+    strategy.cancel("Long SL/TP2")
+    strategy.cancel("Short SL/TP2")
+if exitEvent and not finalBuy and not finalSell
+    strategy.close_all(comment=lastExit)
+if tradeDir == 1
+    strategy.exit("Long SL/TP2", from_entry="Long", stop=activeSL, limit=activeTP2)
+if tradeDir == -1
+    strategy.exit("Short SL/TP2", from_entry="Short", stop=activeSL, limit=activeTP2)
+
+// OPTIONAL MOMENTUM PROJECTION
+// ─────────────────────────────────────────────────────────────
+float lrCurr = ta.linreg(close, predLookback, 0)
+float lrPrev = ta.linreg(close, predLookback, 1)
+float lrSlope = lrCurr - lrPrev
+float emaSpread = (ema9 - ema20) * 0.18
+float rsiPush = (rsiVal - 50.0) / 50.0 * atrVal * 0.20
+float rawStep = lrSlope * 0.55 + emaSpread * 0.25 + rsiPush * 0.20
+float stepDelta = math.max(-atrVal * 0.55, math.min(atrVal * 0.55, rawStep))
+
+int anchorOffset = barstate.isconfirmed ? 0 : 1
+float projectionBase = close[anchorOffset]
+float projectionATR = atrVal[anchorOffset]
+float projectionStep = stepDelta[anchorOffset]
+int projectionBar = bar_index - anchorOffset
+float finalPredClose = projectionBase
+
+for i = 1 to numFutureBars
+    finalPredClose += projectionStep * math.pow(0.90, i - 1)
+
+var array<line> projLines = array.new_line()
+var label projLabel = na
+
+if barstate.islast
+    while array.size(projLines) > 0
+        line.delete(array.pop(projLines))
+
+    label.delete(projLabel)
+
+    if not na(finalPredClose) and (showFutureCandles or showProjChannel)
+        float previous = projectionBase
+        float previousUpper = projectionBase
+        float previousLower = projectionBase
+
+        for i = 1 to numFutureBars
+            float projected = previous + projectionStep * math.pow(0.90, i - 1)
+            float spread = projectionATR * 0.45 * math.sqrt(i)
+            color projectionColor = math.abs(projected - previous) < syminfo.mintick * 0.5 ? color.gray : projected > previous ? color.new(#00e676, 30) : color.new(#ff1744, 30)
+
+            if showFutureCandles
+                array.push(projLines, line.new(projectionBar + i, math.min(previous, projected) - projectionATR * 0.22, projectionBar + i, math.max(previous, projected) + projectionATR * 0.22, color=projectionColor, width=1))
+                array.push(projLines, line.new(projectionBar + i, previous, projectionBar + i, projected, color=projectionColor, width=6))
+
+            if showProjChannel
+                array.push(projLines, line.new(projectionBar + i - 1, previous, projectionBar + i, projected, color=color.yellow, style=line.style_dotted))
+                array.push(projLines, line.new(projectionBar + i - 1, previousUpper, projectionBar + i, projected + spread, color=color.new(#00bcd4, 55), style=line.style_dashed))
+                array.push(projLines, line.new(projectionBar + i - 1, previousLower, projectionBar + i, projected - spread, color=color.new(#ff9800, 55), style=line.style_dashed))
+
+            previous := projected
+            previousUpper := projected + spread
+            previousLower := projected - spread
+
+        projLabel := label.new(projectionBar + numFutureBars + 1, finalPredClose, "PROJECTION " + f_price(finalPredClose), color=color.new(color.gray, 20), textcolor=color.white, style=label.style_label_left, size=size.tiny)
+
+// ─────────────────────────────────────────────────────────────
+// INDICATOR PLOTS
+// ─────────────────────────────────────────────────────────────
+plot(ema9, "9 EMA", color=#00bcd4, linewidth=2, display=display.pane)
+plot(ema20, "20 EMA", color=#ff9800, linewidth=2, display=display.pane)
+plot(showVWAP ? filterVal : na, "Selected Price Filter", color=#e040fb, linewidth=2, display=display.pane)
+
+plot(showORB and afterOrb and isLatestDay ? orbHigh : na, "ORB High", color=color.new(#00e676, 15), style=plot.style_linebr, linewidth=2, display=display.pane)
+plot(showORB and afterOrb and isLatestDay ? orbLow : na, "ORB Low", color=color.new(#ff5252, 15), style=plot.style_linebr, linewidth=2, display=display.pane)
+
+pTop = plot(showCPR and isLatestDay ? cprTop : na, "CPR Top", color=color.new(#ab47bc, 35), style=plot.style_linebr, display=display.pane)
+pBot = plot(showCPR and isLatestDay ? cprBot : na, "CPR Bottom", color=color.new(#ab47bc, 35), style=plot.style_linebr, display=display.pane)
+
+plot(showCPR and isLatestDay ? pivot : na, "Daily Pivot", color=color.new(#e040fb, 15), style=plot.style_linebr, display=display.pane)
+fill(pTop, pBot, color=color.new(#ab47bc, 86), title="CPR Zone")
+
+plot(showCPR and isLatestDay ? r1 : na, "Daily R1", color=color.new(#00e676, 40), style=plot.style_linebr, display=display.pane)
+plot(showCPR and isLatestDay ? s1 : na, "Daily S1", color=color.new(#ff5252, 40), style=plot.style_linebr, display=display.pane)
+
+// ─────────────────────────────────────────────────────────────
+// CLEAR BUY / SELL SIGNAL LABELS
+// ─────────────────────────────────────────────────────────────
+if finalBuy or finalSell
+    string details = "Confirmed at " + str.format_time(time_close, "dd/MM HH:mm", TZ) + " IST\nFutures entry: " + f_price(activeEntry) + "\nOriginal SL: " + f_price(activeSL) + "\nTP1: " + f_price(activeTP1) + "\nTP2: " + f_price(activeTP2) + "\nTP1 marks a touch; no partial profit booking."
+
+    float signalY = finalBuy ? low - atrVal * signalGap : high + atrVal * signalGap
+    color signalColor = finalBuy ? uiBuy : uiSell
+
+    line.new(bar_index, finalBuy ? low : high, bar_index, signalY, color=signalColor, width=2)
+
+    label sig = f_tag(signalY, (stopSellEntry ? "SL PULLBACK RE-ENTRY\n" : continuationEntry ? "TP2 RE-ENTRY\n" : "") + (finalBuy ? "FUTURES BUY\n" : "FUTURES SELL\n") + f_price(close), signalColor, not finalBuy)
+    label.set_tooltip(sig, details)
+
+// ─────────────────────────────────────────────────────────────
+// ACTIVE FUTURES LINES AND PRICE TAGS
+// ─────────────────────────────────────────────────────────────
+var array<line> tradeLines = array.new_line()
+var array<label> levelTags = array.new_label()
+
+f_levelTag(int x, float y, string title, color ink) =>
+    label.new(x, y, title + " " + f_price(y), style=label.style_label_left, color=#101820, textcolor=ink, size=labelText, text_formatting=text.format_bold)
+
+if barstate.islast
+    while array.size(tradeLines) > 0
+        line.delete(array.pop(tradeLines))
+
+    while array.size(levelTags) > 0
+        label.delete(array.pop(levelTags))
+
+    if tradeDir != 0 and not na(activeBarIdx)
+        int x2 = bar_index + numFutureBars
+        bool beStop = math.abs(activeSL - activeEntry) < syminfo.mintick * 0.5
+
+        array.push(tradeLines, line.new(activeBarIdx, activeEntry, x2, activeEntry, color=color.white, width=2, style=line.style_dashed))
+
+        if not beStop
+            array.push(tradeLines, line.new(activeBarIdx, activeSL, x2, activeSL, color=#FF5252, width=2, style=line.style_dashed))
+
+        array.push(tradeLines, line.new(activeBarIdx, activeTP1, x2, activeTP1, color=#50EF48, width=2, style=line.style_dashed))
+        array.push(tradeLines, line.new(activeBarIdx, activeTP2, x2, activeTP2, color=#00DAE0, width=2, style=line.style_dashed))
+
+        if showLevelTags
+            array.push(levelTags, f_levelTag(x2, activeEntry, beStop ? "ENTRY / BE SL" : "ENTRY", color.white))
+
+            if not beStop
+                array.push(levelTags, f_levelTag(x2, activeSL, "SL", #FF8080))
+
+            array.push(levelTags, f_levelTag(x2, activeTP1, "TP1", #72FF68))
+            array.push(levelTags, f_levelTag(x2, activeTP2, "TP2", #63F7FB))
+
+// ─────────────────────────────────────────────────────────────
+// ALERTS
+// ─────────────────────────────────────────────────────────────
+alertcondition(finalBuy, "Confirmed Intraday BUY", "Confirmed BUY on {{ticker}} ({{interval}}) at {{close}}")
+alertcondition(finalSell, "Confirmed Intraday SELL", "Confirmed SELL on {{ticker}} ({{interval}}) at {{close}}")
+alertcondition(tp1Event, "TP1 Touched", "TP1 touched on {{ticker}} ({{interval}}); confirmed at bar close")
+alertcondition(tp2Event, "TP2 Exit", "TP2 exit on {{ticker}} ({{interval}}); confirmed at bar close")
+alertcondition(exitEvent, "Tracked Trade Exit", "Tracked trade exit on {{ticker}} ({{interval}}); inspect chart for reason and tracked exit price")
+alertcondition(stopSellEntry, "Post-SL Pullback SELL", "Confirmed post-stop pullback SELL on {{ticker}} ({{interval}}) at {{close}}")
+alertcondition(continuationEntry, "TP2 Continuation Entry", "Confirmed trend re-entry after TP2 on {{ticker}} ({{interval}}) at {{close}}; inspect new option reference levels")
+
+// Auto options: verified MCX:CRUDEOIL261117C9000 / P9000 format.
+grpOpt = "4. Automatic MCX ATM Options"
+showOptions = input.bool(false, "Show Automatic ATM Option Panel", group=grpOpt, tooltip="Disabled by default in this research copy because automatic option quotes use many request contexts. The futures backtest does not need them.")
+optionSLMult = input.float(1.4, "Option ATR Stop Multiplier", minval=0.1, step=0.1, group=grpOpt)
+showOptionEntryLabels = input.bool(false, "Show Large Option Entry Labels", group=grpOpt)
+strikeStep = input.int(50, "Strike interval (INR)", minval=1, group=grpOpt, tooltip="Default 50 for crude oil. ATM is rounded to this interval.")
+
+f_premium(float price) =>
+    na(price) ? "N/A" : str.tostring(price, "0.00")
+
+// Use the exact futures month, not the calendar month or a guessed nearest expiry.
+string optionRoot = str.startswith(syminfo.ticker, "CRUDEOILM") ? "CRUDEOILM" : "CRUDEOIL"
+int rootLength = str.length(optionRoot)
+bool datedFuture = str.length(syminfo.ticker) == rootLength + 5 and not str.contains(syminfo.ticker, "!")
+string monthCode = datedFuture ? str.substring(syminfo.ticker, rootLength, rootLength + 1) : ""
+int monthIndex = datedFuture ? str.pos("FGHJKMNQUVXZ", monthCode) : na
+int contractYear = datedFuture ? int(str.tonumber(str.substring(syminfo.ticker, rootLength + 1))) : na
+int contractMonth = not na(monthIndex) ? monthIndex + 1 : na
+bool contractKnown = datedFuture and not na(contractYear) and contractYear >= 2000 and not na(contractMonth) and contractMonth >= 1 and contractMonth <= 12
+
+f_optionSymbol(string expiry, int strike, bool callOption) =>
+    "MCX:" + optionRoot + expiry + (callOption ? "C" : "P") + str.tostring(strike)
+
+var string optionExpiry = ""
+var int optionExpiryEnd = na
+var int optionCenter = na
+var int basketRadius = 0
+var int probeCount = 0
+
+// Discover once before realtime. At most 31 call probes, then a budgeted basket.
+// Reserve request headroom for the confirmed higher-timeframe filter and chart contexts.
+// A missing call quote can prevent discovery; do not fabricate option prices.
+if showOptions and contractKnown and barstate.islastconfirmedhistory
+    optionCenter := int(math.round(close / strikeStep)) * strikeStep
+    int anchorTime = math.max(last_bar_time, time_close)
+    for d = 1 to 31
+        int candidateEnd = timestamp(TZ, contractYear, contractMonth, d, 23, 20)
+        if month(candidateEnd, TZ) == contractMonth and candidateEnd > anchorTime
+            string code = str.format_time(candidateEnd, "yyMMdd", TZ)
+            [probe, probeTime] = request.security(f_optionSymbol(code, optionCenter, true), timeframe.period, [close, time], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off, ignore_invalid_symbol=true)
+            probeCount += 1
+            if not na(probe) and probe > 0 and not na(probeTime)
+                optionExpiry := code
+                optionExpiryEnd := candidateEnd
+                basketRadius := math.max(0, math.min(4, int(math.floor((28 - probeCount) / 4.0))))
+                break
+
+bool expiryConfigured = optionExpiry != "" and not na(optionCenter)
+bool optionExpired = expiryConfigured and (barstate.isrealtime ? timenow : time_close) >= optionExpiryEnd
+int currentATM = int(math.round(close / strikeStep)) * strikeStep
+var int lastSignalATM = na
+var int lastSignalDir = 0
+if barstate.isconfirmed and isNewDay
+    lastSignalATM := na
+    lastSignalDir := 0
+if barstate.isconfirmed and (finalBuy or finalSell)
+    lastSignalATM := int(math.round(activeEntry / strikeStep)) * strikeStep
+    lastSignalDir := finalBuy ? 1 : -1
+int histSignalOffset = not na(lastSigBar) and bar_index >= lastSigBar and bar_index - lastSigBar <= 80 ? bar_index - lastSigBar : 0
+
+f_optSeries(int rawOff) =>
+    float optAtr = ta.atr(14)
+    max_bars_back(close, 500)
+    max_bars_back(optAtr, 500)
+    int safeOff = math.max(0, math.min(rawOff, math.min(bar_index, 80)))
+    [close, optAtr, time, syminfo.mintick, close[safeOff], optAtr[safeOff]]
+
+bool outsideBasket = expiryConfigured and math.abs(currentATM - optionCenter) > basketRadius * strikeStep
+array<float> cePrices = array.new_float(9, na)
+array<float> pePrices = array.new_float(9, na)
+array<float> ceATRs = array.new_float(9, na)
+array<float> peATRs = array.new_float(9, na)
+array<float> ceTicks = array.new_float(9, na)
+array<float> peTicks = array.new_float(9, na)
+array<int> ceTimes = array.new_int(9, na)
+array<int> peTimes = array.new_int(9, na)
+array<float> ceEntryPrices = array.new_float(9, na)
+array<float> peEntryPrices = array.new_float(9, na)
+array<float> ceEntryATRs = array.new_float(9, na)
+array<float> peEntryATRs = array.new_float(9, na)
+
+// Keep the same request contexts on every live update. Never add unseen symbols.
+if showOptions and expiryConfigured
+    for k = 0 to 2 * basketRadius
+        int strike = optionCenter + (k - basketRadius) * strikeStep
+        [cp, ca, ct, ck, cep, cea] = request.security(f_optionSymbol(optionExpiry, strike, true), timeframe.period, f_optSeries(histSignalOffset), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off, ignore_invalid_symbol=true)
+        [pp, pa, pt, pk, pep, pea] = request.security(f_optionSymbol(optionExpiry, strike, false), timeframe.period, f_optSeries(histSignalOffset), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off, ignore_invalid_symbol=true)
+        array.set(cePrices, k, cp)
+        array.set(pePrices, k, pp)
+        array.set(ceATRs, k, ca)
+        array.set(peATRs, k, pa)
+        array.set(ceTicks, k, ck)
+        array.set(peTicks, k, pk)
+        array.set(ceTimes, k, ct)
+        array.set(peTimes, k, pt)
+        array.set(ceEntryPrices, k, cep)
+        array.set(peEntryPrices, k, pep)
+        array.set(ceEntryATRs, k, cea)
+        array.set(peEntryATRs, k, pea)
+
+float cePrice = na
+float pePrice = na
+float ceATR = na
+float peATR = na
+float ceTick = na
+float peTick = na
+int ceTime = na
+int peTime = na
+string ceSymbol = ""
+string peSymbol = ""
+bool usableBasket = showOptions and expiryConfigured and not optionExpired and not outsideBasket
+if usableBasket
+    int idx = int((currentATM - optionCenter) / strikeStep) + basketRadius
+    if idx >= 0 and idx <= 2 * basketRadius
+        cePrice := array.get(cePrices, idx)
+        pePrice := array.get(pePrices, idx)
+        ceATR := array.get(ceATRs, idx)
+        peATR := array.get(peATRs, idx)
+        ceTick := array.get(ceTicks, idx)
+        peTick := array.get(peTicks, idx)
+        ceTime := array.get(ceTimes, idx)
+        peTime := array.get(peTimes, idx)
+        ceSymbol := f_optionSymbol(optionExpiry, currentATM, true)
+        peSymbol := f_optionSymbol(optionExpiry, currentATM, false)
+bool ceValid = usableBasket and not na(cePrice)
+bool peValid = usableBasket and not na(pePrice)
+string autoStatus = not contractKnown ? "Use dated MCX crude futures" : not expiryConfigured ? "No quoted expiry found; reload" : optionExpired ? "Option expiry cutoff; change futures" : outsideBasket ? "ATM outside loaded range; reload" : na(cePrice) or na(pePrice) ? "ATM option quote missing" : ceTime != time or peTime != time ? "Older-bar quotes; entry blocked" : "Current-bar ATM quotes"
+
+
+var string lockedContract = ""
+var int lockedStrike = na
+var int lockedDirection = 0
+var float optionEntry = na
+var float optionSL = na
+var float optionTP1 = na
+var float optionTP2 = na
+var string optionStatus = "WAIT FOR NEW SIGNAL"
+
+if barstate.isconfirmed and isNewDay
+    lockedContract := ""
+    lockedStrike := na
+    lockedDirection := 0
+    optionEntry := na
+    optionSL := na
+    optionTP1 := na
+    optionTP2 := na
+    optionStatus := "WAIT FOR NEW SIGNAL"
+
+if barstate.isconfirmed and (finalBuy or finalSell)
+    lockedContract := ""
+    lockedStrike := na
+    lockedDirection := 0
+    optionEntry := na
+    optionSL := na
+    optionTP1 := na
+    optionTP2 := na
+    optionStatus := "Historical entry not captured"
+    if showOptions and (barstate.isrealtime or barstate.islastconfirmedhistory)
+        string selected = finalBuy ? ceSymbol : peSymbol
+        float premium = finalBuy ? cePrice : pePrice
+        float premiumATR = finalBuy ? ceATR : peATR
+        float tick = finalBuy ? ceTick : peTick
+        int quoteTime = finalBuy ? ceTime : peTime
+        bool validContract = finalBuy ? ceValid : peValid
+        optionStatus := not usableBasket ? autoStatus : not validContract ? "MCX crude option unavailable" : "Entry quote unavailable / older bar"
+        if selected != "" and validContract and quoteTime == time and not na(premium) and premium > 0
+            lockedContract := selected
+            lockedStrike := currentATM
+            lockedDirection := finalBuy ? 1 : -1
+            optionEntry := premium
+            optionStatus := "Option ATR / tick unavailable"
+            if not na(premiumATR) and premiumATR > 0 and not na(tick) and tick > 0 and premium > tick
+                float risk = math.min(math.max(premiumATR * optionSLMult, tick), premium - tick)
+                optionSL := math.max(tick, math.floor((premium - risk) / tick) * tick)
+                float actualRisk = premium - optionSL
+                optionTP1 := math.ceil((premium + actualRisk * rrRatio1) / tick) * tick
+                optionTP2 := math.max(optionTP1 + tick, math.ceil((premium + actualRisk * rrRatio2) / tick) * tick)
+                optionStatus := "Fixed option references"
+        if showOptionEntryLabels and lockedContract != ""
+            label.new(bar_index, finalBuy ? low - atrVal * labelGap : high + atrVal * labelGap, "BUY " + lockedContract + "\nENTRY " + f_premium(optionEntry) + " | SL " + f_premium(optionSL) + "\nT1 " + f_premium(optionTP1) + " | T2 " + f_premium(optionTP2), style=finalBuy ? label.style_label_up : label.style_label_down, color=uiBlue, textcolor=color.white, size=labelText)
+
+if barstate.islastconfirmedhistory and showOptions and expiryConfigured and not optionExpired and lockedContract == "" and not na(lastSigBar) and bar_index - lastSigBar <= 80 and not na(lastSignalATM) and lastSignalDir != 0
+    int histIdx = int((lastSignalATM - optionCenter) / strikeStep) + basketRadius
+    if histIdx >= 0 and histIdx <= 2 * basketRadius
+        bool histCall = lastSignalDir == 1
+        string histContract = f_optionSymbol(optionExpiry, lastSignalATM, histCall)
+        float histPremium = histCall ? array.get(ceEntryPrices, histIdx) : array.get(peEntryPrices, histIdx)
+        float histATR = histCall ? array.get(ceEntryATRs, histIdx) : array.get(peEntryATRs, histIdx)
+        float histTick = histCall ? array.get(ceTicks, histIdx) : array.get(peTicks, histIdx)
+        if not na(histPremium) and histPremium > 0
+            lockedContract := histContract
+            lockedStrike := lastSignalATM
+            lockedDirection := lastSignalDir
+            optionEntry := histPremium
+            optionStatus := "Option ATR / tick unavailable"
+            if not na(histATR) and histATR > 0 and not na(histTick) and histTick > 0 and histPremium > histTick
+                float risk = math.min(math.max(histATR * optionSLMult, histTick), histPremium - histTick)
+                optionSL := math.max(histTick, math.floor((histPremium - risk) / histTick) * histTick)
+                float actualRisk = histPremium - optionSL
+                optionTP1 := math.ceil((histPremium + actualRisk * rrRatio1) / histTick) * histTick
+                optionTP2 := math.max(optionTP1 + histTick, math.ceil((histPremium + actualRisk * rrRatio2) / histTick) * histTick)
+                optionStatus := "Fixed option references"
+            if showOptionEntryLabels and not na(lastSigBar)
+                int sigOffset = math.max(0, bar_index - lastSigBar)
+                float sigBaseY = histCall ? low[sigOffset] - atrVal[sigOffset] * labelGap : high[sigOffset] + atrVal[sigOffset] * labelGap
+                label.new(lastSigBar, sigBaseY, "BUY " + lockedContract + "\nENTRY " + f_premium(optionEntry) + " | SL " + f_premium(optionSL) + "\nT1 " + f_premium(optionTP1) + " | T2 " + f_premium(optionTP2), style=histCall ? label.style_label_up : label.style_label_down, color=uiBlue, textcolor=color.white, size=labelText)
+
+// Read the locked strike from the existing preloaded basket: no extra requests,
+// and no dependence on which strike is ATM now. Retained after futures exit.
+float lockedLTP = na
+int lockedQuoteTime = na
+if showOptions and expiryConfigured and not optionExpired and lockedContract != "" and not na(lockedStrike)
+    int lockedIdx = int((lockedStrike - optionCenter) / strikeStep) + basketRadius
+    if lockedIdx >= 0 and lockedIdx <= 2 * basketRadius
+        lockedLTP := lockedDirection == 1 ? array.get(cePrices, lockedIdx) : array.get(pePrices, lockedIdx)
+        lockedQuoteTime := lockedDirection == 1 ? array.get(ceTimes, lockedIdx) : array.get(peTimes, lockedIdx)
+string lockedQuoteStatus = lockedContract == "" ? "No locked entry" : optionExpired ? "Expiry cutoff" : na(lockedLTP) ? "Quote unavailable" : lockedQuoteTime != time ? "Older-bar quote" : "Current-bar quote"
+
+// Explain waiting states without suggesting that a qualifying state guarantees entry.
+string signalStatus = not dataReady ? "Filter / indicator data missing" : not inTradeSession or cutoffReached ? "Outside entry window" : tradeDir != 0 ? "Tracking futures trade" : not na(lastLosingStopBar) and bar_index - lastLosingStopBar < slCooldownBars ? "SL cooldown: " + str.tostring(slCooldownBars - (bar_index - lastLosingStopBar)) + " bars" : not spikeOk ? "Entry spike / extension blocked" : not na(lastSigBar) and bar_index - lastSigBar < minBarsBetween ? "Entry cooldown" : continuationDir != 0 ? reentryMode == "Pullback then recovery" ? (na(continuationPullbackBar) ? "TP2: awaiting EMA9 pullback" : "TP2: awaiting recovery close") : "TP2: awaiting fresh breakout" : waitingForStopSell and not bullTrendState ? (na(stopSellTouchBar) ? "Post-SL sell: awaiting EMA9 pullback" : "Post-SL sell: awaiting bearish close") : bullTrendState ? "Bull filters; awaiting setup / close" : bearTrendState ? "Bear filters; awaiting setup / close" : waitingForStopSell ? (na(stopSellTouchBar) ? "Post-SL sell: awaiting EMA9 pullback" : "Post-SL sell: awaiting bearish close") : "Trend filters not aligned"
+
+var table dashboard = table.new(panelPosition, 2, 11, bgcolor=uiWhite, frame_color=uiBorder, frame_width=1, border_color=uiBorder, border_width=1)
+if barstate.islast
+    table.clear(dashboard, 0, 0, 1, 10)
+    int row = 0
+    if showHUD
+        string state = tradeDir == 1 ? "BUY " + f_price(activeEntry) : tradeDir == -1 ? "SELL " + f_price(activeEntry) : "NO ACTIVE TRADE"
+        f_row(dashboard, row, "CRUDE " + timeframe.period + "m", state, tradeDir == 1 ? uiGreen : tradeDir == -1 ? uiRed : uiWhite, uiInk, false)
+        row += 1
+        f_row(dashboard, row, "FUTURES SL", f_price(activeSL), uiRed, #941B22, false)
+        row += 1
+        f_row(dashboard, row, "FUTURES T1 / T2", f_price(activeTP1) + " / " + f_price(activeTP2), uiGreen, #14532D, false)
+        row += 1
+        f_row(dashboard, row, "SIGNAL STATUS", signalStatus, uiWhite, uiInk, false)
+        row += 1
+    if showOptions
+        f_row(dashboard, row, "ATM " + str.tostring(currentATM) + " / " + optionExpiry, "CE " + f_premium(cePrice) + "\nPE " + f_premium(pePrice), uiLightBlue, uiInk, false)
+        row += 1
+        f_row(dashboard, row, "LOCKED CONTRACT", lockedContract == "" ? "NONE" : lockedContract, uiYellow, uiInk, false)
+        row += 1
+        f_row(dashboard, row, "LOCKED OPTION LTP", f_premium(lockedLTP) + "\n" + lockedQuoteStatus, uiLightBlue, uiInk, false)
+        row += 1
+        f_row(dashboard, row, "OPTION ENTRY / SL", f_premium(optionEntry) + " / " + f_premium(optionSL), uiRed, #941B22, false)
+        row += 1
+        f_row(dashboard, row, "OPTION T1 / T2", f_premium(optionTP1) + " / " + f_premium(optionTP2), uiGreen, #14532D, false)
+        row += 1
+        string quoteStatus = autoStatus
+        f_row(dashboard, row, "QUOTE STATUS", quoteStatus, uiWhite, uiInk, false)
+        row += 1
+        f_row(dashboard, row, "REFERENCES ONLY", not na(optionSL) and tradeDir == 0 ? "Futures closed; last levels" : optionStatus, uiWhite, uiInk, false)
+
+// ─────────────────────────────────────────────────────────────

@@ -87,8 +87,8 @@ FALLBACK_LOT_SIZES = {
 # 1. KITE CONNECT CLIENT INITIALIZATION
 # ──────────────────────────────────────────────────────────────
 
-def get_kite_client() -> Optional[Any]:
-    """Safely initialize and authenticate KiteConnect client."""
+def get_kite_client(max_retries: int = 3, retry_delay: float = 1.0) -> Optional[Any]:
+    """Safely initialize and authenticate KiteConnect client with retry logic."""
     if KiteConnect is None:
         return None
 
@@ -114,62 +114,80 @@ def get_kite_client() -> Optional[Any]:
         Path("../../.kite_api_key"),
     ]
 
-    token = os.getenv("ZERODHA_ACCESS_TOKEN", "").strip()
-    if not token:
-        master_token = Path("/home/ubuntu/NiftyScanner/.kite_access_token")
-        if master_token.exists():
-            try:
-                val = master_token.read_text(encoding="utf-8").strip()
-                if val:
-                    token = val
-            except Exception:
-                pass
+    def _read_token_file(path: Path, min_len: int = 10) -> Optional[str]:
+        """Read token file with validation - handle partial writes during rotation."""
+        try:
+            val = path.read_text(encoding="utf-8").strip()
+            if val and len(val) >= min_len:
+                return val
+        except Exception:
+            pass
+        return None
 
-    if not token:
+    def _read_latest_token() -> Optional[str]:
+        token = os.getenv("ZERODHA_ACCESS_TOKEN", "").strip()
+        if token:
+            return token
+
+        master_token = Path("/home/ubuntu/NiftyScanner/.kite_access_token")
+        val = _read_token_file(master_token, min_len=20)  # Kite tokens are 32+ chars
+        if val:
+            return val
+
+        # Read most recently modified valid token file
         existing_tokens = [p for p in token_candidates if p and p.exists()]
         existing_tokens.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         for p in existing_tokens:
-            try:
-                val = p.read_text(encoding="utf-8").strip()
-                if val:
-                    token = val
-                    break
-            except Exception:
-                pass
+            val = _read_token_file(p, min_len=20)
+            if val:
+                return val
+        return None
 
-    api_key = os.getenv("ZERODHA_API_KEY", "").strip()
-    if not api_key:
+    def _read_latest_api_key() -> Optional[str]:
+        api_key = os.getenv("ZERODHA_API_KEY", "").strip()
+        if api_key:
+            return api_key
+
         master_key = Path("/home/ubuntu/NiftyScanner/.kite_api_key")
-        if master_key.exists():
-            try:
-                val = master_key.read_text(encoding="utf-8").strip()
-                if val:
-                    api_key = val
-            except Exception:
-                pass
+        val = _read_token_file(master_key, min_len=10)  # API keys are ~16 chars
+        if val:
+            return val
 
-    if not api_key:
         for p in key_candidates:
             if p and p.exists():
-                try:
-                    val = p.read_text(encoding="utf-8").strip()
-                    if val:
-                        api_key = val
-                        break
-                except Exception:
-                    pass
-
-    if not token or not api_key:
+                val = _read_token_file(p, min_len=10)
+                if val:
+                    return val
         return None
 
-    try:
-        kite = KiteConnect(api_key=api_key)
-        kite.set_access_token(token)
-        kite.profile()
-        return kite
-    except Exception as e:
-        print(f"⚠️ [KiteConnect] Authentication check failed: {e}")
-        return None
+    # Retry logic for token file race conditions (auto_auth writes at 7 AM)
+    for attempt in range(max_retries):
+        token = _read_latest_token()
+        api_key = _read_latest_api_key()
+
+        if not token or not api_key:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+            return None
+
+        try:
+            kite = KiteConnect(api_key=api_key)
+            kite.set_access_token(token)
+            kite.profile()  # Validates token
+            return kite
+        except Exception as e:
+            # Token expired or invalid - clear cached invalid token and retry
+            error_str = str(e).lower()
+            if "incorrect" in error_str or "expired" in error_str or "invalid" in error_str:
+                if attempt < max_retries - 1:
+                    print(f"⚠️ [KiteConnect] Token validation failed (attempt {attempt+1}/{max_retries}): {e}")
+                    time.sleep(retry_delay)
+                    continue
+            print(f"⚠️ [KiteConnect] Authentication check failed: {e}")
+            return None
+
+    return None
 
 
 # ──────────────────────────────────────────────────────────────
@@ -353,21 +371,23 @@ def calculate_powerful_sl_engine(
         market_vol = "normal"
 
     if not is_btst:
-        delta_mult = 0.18 if market_vol == "normal" else (0.20 if market_vol == "volatile" else 0.22)
-        theta_mult = 1.5 if market_vol == "normal" else (2.0 if market_vol == "volatile" else 2.5)
-        vega_mult = 5.0 if market_vol != "extreme" else 7.5
+        # Intraday trades hold for 1-3 hours (not full days); calibrate buffers to disciplined 7-10% noise ceiling
+        delta_mult = 0.10 if market_vol == "normal" else (0.12 if market_vol == "volatile" else 0.14)
+        theta_mult = 1.0 if market_vol == "normal" else (1.2 if market_vol == "volatile" else 1.5)
+        vega_mult = 2.0 if market_vol != "extreme" else 3.0
 
         layer1_buffer = entry_price * (abs(delta) * delta_mult)
-        layer2_vol_buffer = ((iv_pct / 0.20) * entry_price * 0.05) if iv_pct > 0.20 else 0.0
+        layer2_vol_buffer = ((iv_pct / 0.20) * entry_price * 0.02) if iv_pct > 0.20 else 0.0
         layer3_theta_buffer = theta_abs * days_held * theta_mult
         layer4_vega_buffer = vega_abs * vega_mult
 
         total_buffer = layer1_buffer + layer2_vol_buffer + layer3_theta_buffer + layer4_vega_buffer
-        powerful_sl = entry_price - total_buffer
-        powerful_sl = max(powerful_sl, entry_price * 0.80)
+        # Disciplined Intraday SL: Noise buffer between 7% and 10% (protects capital, never arbitrary 20%)
+        total_buffer = max(entry_price * 0.07, min(total_buffer, entry_price * 0.10))
+        powerful_sl = round(entry_price - total_buffer, 2)
 
-        trailing_trigger = entry_price * 1.05
-        trailing_sl_new = powerful_sl + (entry_price * 1.05 - entry_price) * 0.5
+        trailing_trigger = round(entry_price * 1.06, 2)
+        trailing_sl_new = round(entry_price * 1.01, 2)
     else:
         layer1_buffer = entry_price * (abs(delta) * 0.15)
         layer2_vol_buffer = ((iv_pct / 0.20) * entry_price * 0.08) if iv_pct > 0.20 else 0.0
@@ -375,11 +395,12 @@ def calculate_powerful_sl_engine(
         layer4_vega_buffer = vega_abs * 7.5
 
         total_buffer = layer1_buffer + layer2_vol_buffer + layer3_theta_buffer + layer4_vega_buffer
-        powerful_sl = entry_price - total_buffer
-        powerful_sl = max(powerful_sl, entry_price * 0.75)
+        # BTST Overnight SL: Disciplined 12% to 15% cap
+        total_buffer = max(entry_price * 0.12, min(total_buffer, entry_price * 0.15))
+        powerful_sl = round(entry_price - total_buffer, 2)
 
-        trailing_trigger = entry_price * 1.10
-        trailing_sl_new = entry_price
+        trailing_trigger = round(entry_price * 1.10, 2)
+        trailing_sl_new = round(entry_price * 1.01, 2)
 
     return {
         "entry_price": round(entry_price, 2),
@@ -409,15 +430,25 @@ def resolve_option_candidate(
     is_btst: bool = False,
     account_size: float = 500000.0,
     sentiment_score: int = 70,
+    meta: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     opt_type = "PE" if "BEARISH" in sentiment.upper() else "CE"
     symbol = symbol.strip().upper()
     is_index = symbol in INDEX_MAP
     is_crude = "CRUDE" in symbol
+    today = datetime.date.today()
 
     # Resolve spot / underlying price key
     if is_crude:
-        spot_key = "MCX:CRUDEOIL26OCTFUT"
+        crude_futs = [
+            i for i in (nfo_instruments or [])
+            if "CRUDEOIL" in (i.get("name") or "").upper() and i.get("segment") == "MCX-FUT" and i.get("expiry") and i["expiry"] >= today
+        ]
+        if crude_futs:
+            crude_futs.sort(key=lambda x: x["expiry"])
+            spot_key = f"MCX:{crude_futs[0]['tradingsymbol']}"
+        else:
+            spot_key = f"MCX:CRUDEOIL{today.strftime('%y%b').upper()}FUT"
     elif is_index:
         spot_key = INDEX_MAP.get(symbol, f"NSE:{symbol}")
     else:
@@ -434,14 +465,17 @@ def resolve_option_candidate(
 
     if spot_price <= 0:
         fallback_spots = {
-            "NIFTY": 22500.0, "BANKNIFTY": 54800.0, "SENSEX": 81500.0, "RELIANCE": 1180.0,
-            "TCS": 2130.0, "HDFCBANK": 715.0, "INFY": 1030.0,
-            "BPCL": 305.0, "VEDL": 255.0, "MARUTI": 11400.0, "BAJFINANCE": 990.0,
-            "CRUDEOIL": 8750.0,
+            "NIFTY": 24200.0, "BANKNIFTY": 51500.0, "SENSEX": 79500.0, "FINNIFTY": 23500.0,
+            "MIDCPNIFTY": 12500.0, "RELIANCE": 1280.0, "TCS": 4050.0, "HDFCBANK": 1720.0,
+            "INFY": 1850.0, "ICICIBANK": 1260.0, "SBIN": 820.0, "BHARTIARTL": 1600.0,
+            "ITC": 480.0, "KOTAKBANK": 1780.0, "LT": 3600.0, "AXISBANK": 1180.0,
+            "BAJFINANCE": 6900.0, "MARUTI": 11500.0, "SUNPHARMA": 1800.0, "TITAN": 3250.0,
+            "BPCL": 310.0, "VEDL": 470.0, "TATASTEEL": 150.0, "HINDALCO": 680.0,
+            "NTPC": 390.0, "POWERGRID": 320.0, "ONGC": 260.0, "IOC": 140.0,
+            "WIPRO": 550.0, "HCLTECH": 1750.0, "CRUDEOIL": 6100.0,
         }
         spot_price = fallback_spots.get(symbol, 1000.0)
 
-    today = datetime.date.today()
     contract = None
     tradingsymbol = ""
     lot_size = FALLBACK_LOT_SIZES.get(symbol, 100 if is_crude else 500)
@@ -450,9 +484,19 @@ def resolve_option_candidate(
 
     # Match exact option contract from Master (NFO/BFO/MCX)
     if nfo_instruments:
+        def matches_symbol(inst_name: str, target_sym: str) -> bool:
+            name = (inst_name or "").upper().strip()
+            target = target_sym.upper().strip()
+            if name == target:
+                return True
+            if target in INDEX_MAP:
+                idx_base = target.replace(" 50", "").replace(" BANK", "").replace("MID SELECT", "").replace(" ", "")
+                return name == idx_base or name == target
+            return False
+
         sym_opts = [
             i for i in nfo_instruments
-            if symbol in i.get("name", "").upper() and i.get("instrument_type") == opt_type and i.get("expiry") and i["expiry"] >= today
+            if matches_symbol(i.get("name", ""), symbol) and i.get("instrument_type") == opt_type and i.get("expiry") and i["expiry"] >= today
         ]
         if sym_opts:
             expiries = sorted(list(set(i["expiry"] for i in sym_opts)))
@@ -500,8 +544,9 @@ def resolve_option_candidate(
     # SAFETY: Never invent an option contract or use a
     # theoretical price as a live trading entry.
     if not tradingsymbol:
+        exch_label = "MCX" if is_crude else "NFO/BFO"
         print(
-            f"❌ SKIPPED: No verified MCX {symbol} "
+            f"❌ SKIPPED: No verified {exch_label} {symbol} "
             f"{opt_type} contract found in Zerodha instruments."
         )
         return None
@@ -509,9 +554,44 @@ def resolve_option_candidate(
         print("❌ SKIPPED: Zerodha Kite is not authenticated.")
         return None
     if option_ltp <= 0.05:
+        exch_label = "MCX" if is_crude else "NFO"
         print(
             f"❌ SKIPPED: No valid live quote for "
-            f"MCX:{tradingsymbol}. No signal sent."
+            f"{exch_label}:{tradingsymbol}. No signal sent."
+        )
+        return None
+
+    # Quality Shield 1: Skip penny / micro-cap underlying stocks (< ₹60)
+    # Allows Tata Steel (~150), SAIL (~160), BEL, PNB, Coal India, RVNL while rejecting sub-₹50 like Sagility
+    if not is_index and not is_crude and spot_price < 60.0:
+        print(
+            f"⚠️ SKIPPED: {symbol} spot price too low (₹{spot_price:.2f} < ₹60.00). High volatility/trap risk."
+        )
+        return None
+
+    # Quality Shield 2: Smart Option Premium Threshold based on Lot Size
+    # For High-Lot Size stocks (1500, 2500, 3000, 4000 shares like SAIL, Tata Steel, RVNL, National Aluminium):
+    # Allow premium down to ₹1.80 if strong conviction (Score >= 88) for "Less Loss, More Profit" high-R:R trades
+    # For standard lot sizes (< 1500 shares): minimum premium is ₹3.50
+    min_premium = 1.80 if lot_size >= 1500 and sentiment_score >= 88 else 3.50
+    if not is_index and not is_crude and option_ltp < min_premium:
+        print(
+            f"⚠️ SKIPPED: {symbol} {tradingsymbol} premium too low (₹{option_ltp:.2f} < ₹{min_premium:.2f}). High noise/whipsaw risk."
+        )
+        return None
+
+    # Quality Shield 3: Tight Liquidity Spread Shield (Max 7.0% spread, down from 12%)
+    if spread_pct > 7.0:
+        print(
+            f"⚠️ SKIPPED: {symbol} {tradingsymbol} bid-ask spread too wide ({spread_pct:.1f}% > 7.0%). Slippage risk."
+        )
+        return None
+
+    # Quality Shield 4: Active Contract Volume Shield (minimum 200 contracts traded today)
+    opt_vol = int(q_info.get("volume", 0)) if "q_info" in locals() and isinstance(q_info, dict) else 0
+    if not is_crude and opt_vol < 200 and not is_btst:
+        print(
+            f"⚠️ SKIPPED: {symbol} {tradingsymbol} contract volume too low ({opt_vol} contracts < 200). Illiquid contract."
         )
         return None
 
@@ -525,13 +605,20 @@ def resolve_option_candidate(
         theta=theta,
         vega=vega,
         is_btst=is_btst,
-        days_held=1.0 if not is_btst else 1.5,
+        days_held=0.25 if not is_btst else 1.5,
     )
+    sl_risk = sl_data["sl_risk"]
 
     if not is_btst:
-        t1 = round(option_ltp * 1.08, 2)
-        t2 = round(option_ltp * 1.15, 2)
+        # Calibrated Positive Risk-to-Reward Ratio:
+        # Target 1 >= 1.35R (T1 points strictly greater than SL risk points, min +12.5%)
+        # Target 2 >= 2.35R (T2 points more than double SL risk points, min +22.0%)
+        t1_gain = max(round(sl_risk * 1.35, 2), round(option_ltp * 0.125, 2))
+        t2_gain = max(round(sl_risk * 2.35, 2), round(option_ltp * 0.22, 2))
+        t1 = round(option_ltp + t1_gain, 2)
+        t2 = round(option_ltp + t2_gain, 2)
     else:
+        # BTST Overnight: T1 +25% (1.66R), T2 +50% (3.33R)
         t1 = round(option_ltp * 1.25, 2)
         t2 = round(option_ltp * 1.50, 2)
 
@@ -556,10 +643,18 @@ def resolve_option_candidate(
     if is_btst and not is_index and t_days <= 2:
         warning_flags.append(f"⚠️ DTE {t_days}d (Overnight Theta Risk)")
 
-    if spread_pct > 5.0:
+    # Quality & Conviction Calibration:
+    # 1. Reward tight bid-ask spread (high institutional liquidity)
+    if spread_pct <= 2.5:
+        sentiment_score = min(98, sentiment_score + 4)
+    elif spread_pct > 5.0:
         warning_flags.append(f"⚠️ Wide Spread ({spread_pct:.1f}%)")
         if spread_pct > 8.0:
             sentiment_score = max(0, sentiment_score - 15)
+
+    # 2. Reward optimal ATM delta efficiency (~0.45 to 0.55 capture speed)
+    if 0.44 <= abs(delta) <= 0.56:
+        sentiment_score = min(98, sentiment_score + 3)
 
     if iv * 100 > 35.0:
         warning_flags.append(f"🔥 High IV ({iv*100:.0f}% Vega Risk)")
@@ -575,6 +670,14 @@ def resolve_option_candidate(
 
     if iv * 100 > 40.0 and recommended_lots > 1:
         recommended_lots = max(1, recommended_lots // 2)
+
+    # "Less Loss, More Profit" Sizing Rule for High-Lot Size Stocks (1500, 2500, 3000, 4000 shares):
+    # Cap to 1 lot if lot_size >= 2500, and max 2 lots if lot_size >= 1500.
+    # This keeps maximum loss strictly small (under ₹1,000–₹1,500) while delivering asymmetric high profit!
+    if lot_size >= 2500:
+        recommended_lots = 1
+    elif lot_size >= 1500 and recommended_lots > 2:
+        recommended_lots = 2
 
     total_shares = recommended_lots * lot_size
     capital_needed = round(total_shares * option_ltp, 2)
@@ -619,6 +722,8 @@ def resolve_option_candidate(
         "market_volatility": sl_data["market_volatility"],
         "score": sentiment_score,
         "sentiment_catalyst": sentiment,
+        "meta": meta or {},
+        "news_meta": meta or {},
         "warning_flags": warning_flags,
         "warning_tag": " • ".join(warning_flags) if warning_flags else "",
         "layer1_buffer": sl_data["layer1_buffer"],
@@ -653,10 +758,13 @@ def resolve_all_candidates(
                 results.append(res)
 
     for item in candidates_list:
+        meta = None
         if isinstance(item, tuple):
             sym = item[0]
             sent = item[1]
             score = int(item[2]) if len(item) > 2 else 70
+            if len(item) > 3 and isinstance(item[3], dict):
+                meta = item[3]
         else:
             sym = str(item).strip()
             sent = "BULLISH"
@@ -669,7 +777,7 @@ def resolve_all_candidates(
             time.sleep(0.35)
 
         cand = resolve_option_candidate(
-            kite, nfo_instruments, sym, sent, is_btst=is_btst, account_size=account_size, sentiment_score=score
+            kite, nfo_instruments, sym, sent, is_btst=is_btst, account_size=account_size, sentiment_score=score, meta=meta
         )
         if cand and cand["score"] >= min_score:
             results.append(cand)

@@ -1,0 +1,164 @@
+//@version=6
+strategy("NIFTY Index Entry & Exit Strategy [Pine v6]", 
+         overlay = true, 
+         initial_capital = 200000, 
+         default_qty_type = strategy.percent_of_equity, 
+         default_qty_value = 100, 
+         commission_type = strategy.commission.percent, 
+         commission_value = 0.03, 
+         pyramiding = 0)
+
+// =============================================================================
+// 1. INPUT SETTINGS
+// =============================================================================
+tradeMode            = input.string("Both", "Trade Direction", options = ["Long Only", "Short Only", "Both"], group = "General Strategy Settings")
+fastEmaLen           = input.int(9, "Fast EMA Length", minval = 1, group = "Moving Averages")
+slowEmaLen           = input.int(21, "Slow EMA Length", minval = 1, group = "Moving Averages")
+useTrendEma          = input.bool(true, "Use 200 EMA Baseline Filter", group = "Moving Averages")
+trendEmaLen          = input.int(200, "Trend EMA Length", minval = 1, group = "Moving Averages")
+
+useVwap              = input.bool(true, "Use Session VWAP Filter (Intraday)", group = "Trend Filters")
+stAtrLen             = input.int(10, "Supertrend ATR Length", minval = 1, group = "Supertrend Settings")
+stFactor             = input.float(3.0, "Supertrend Factor", minval = 0.5, step = 0.1, group = "Supertrend Settings")
+
+rsiLen               = input.int(14, "RSI Length", minval = 1, group = "Momentum (RSI)")
+rsiLongThreshold     = input.int(50, "RSI Bullish Threshold (Min)", minval = 1, maxval = 100, group = "Momentum (RSI)")
+rsiShortThreshold    = input.int(50, "RSI Bearish Threshold (Max)", minval = 1, maxval = 100, group = "Momentum (RSI)")
+
+// Risk Management
+atrLen               = input.int(14, "ATR Length for SL/TP", minval = 1, group = "Risk Management")
+slAtrMultiplier      = input.float(1.5, "Stop Loss ATR Multiplier", minval = 0.5, step = 0.1, group = "Risk Management")
+rrRatio              = input.float(2.0, "Risk-to-Reward Ratio (Target)", minval = 1.0, step = 0.25, group = "Risk Management")
+exitOnSupertrendFlip = input.bool(true, "Early Exit on Supertrend Reversal", group = "Risk Management")
+showPnl              = input.bool(true, "Show Today's P&L", group = "Risk Management")
+
+// Intraday Timing (IST - Indian Standard Time)
+useSessionFilter     = input.bool(true, "Enable Intraday Session Filter", group = "Intraday Timers (IST)")
+entrySession         = input.session("0920-1445", "Allowed Entry Window", group = "Intraday Timers (IST)", tooltip = "Time range in IST when new trades are permitted")
+squareOffSession     = input.session("1515-1525", "Intraday Auto Square-Off Window", group = "Intraday Timers (IST)", tooltip = "Time in IST when open intraday trades are closed")
+
+// =============================================================================
+// 2. INDICATOR COMPUTATIONS
+// =============================================================================
+fastEma   = ta.ema(close, fastEmaLen)
+slowEma   = ta.ema(close, slowEmaLen)
+trendEma  = ta.ema(close, trendEmaLen)
+sessionVwap = ta.vwap(hlc3)
+[stValue, stDirection] = ta.supertrend(stFactor, stAtrLen) // -1 is Bullish, 1 is Bearish
+rsiVal    = ta.rsi(close, rsiLen)
+atrVal    = ta.atr(atrLen)
+
+// Intraday timing checks in Asia/Kolkata
+isInEntrySession = not useSessionFilter or not na(time(timeframe.period, entrySession + ":23456", "Asia/Kolkata"))
+isSquareOffTime  = useSessionFilter and not na(time(timeframe.period, squareOffSession + ":23456", "Asia/Kolkata"))
+
+// =============================================================================
+// 3. ENTRY & EXIT CRITERIA
+// =============================================================================
+bullishEmaCross = ta.crossover(fastEma, slowEma)
+bearishEmaCross = ta.crossunder(fastEma, slowEma)
+
+longTrendOk  = (not useTrendEma or close > trendEma) and (not (useVwap and timeframe.isintraday) or close > sessionVwap)
+shortTrendOk = (not useTrendEma or close < trendEma) and (not (useVwap and timeframe.isintraday) or close < sessionVwap)
+
+stBullish = stDirection < 0
+stBearish = stDirection > 0
+
+enterLong  = (tradeMode != "Short Only") and barstate.isconfirmed and isInEntrySession and bullishEmaCross and stBullish and longTrendOk and (rsiVal >= rsiLongThreshold)
+enterShort = (tradeMode != "Long Only")  and barstate.isconfirmed and isInEntrySession and bearishEmaCross and stBearish and shortTrendOk and (rsiVal <= rsiShortThreshold)
+
+var float longStopPrice    = na
+var float longTargetPrice  = na
+var float shortStopPrice   = na
+var float shortTargetPrice = na
+
+// Reset levels if no active position
+if strategy.position_size == 0
+    longStopPrice    := na
+    longTargetPrice  := na
+    shortStopPrice   := na
+    shortTargetPrice := na
+
+// =============================================================================
+// 4. STRATEGY ORDERS & EXITS
+// =============================================================================
+// Long Trade
+if enterLong and strategy.position_size == 0
+    longStopPrice   := close - (atrVal * slAtrMultiplier)
+    longTargetPrice := close + ((close - longStopPrice) * rrRatio)
+    strategy.entry("Long Entry", strategy.long)
+    strategy.exit("Long Exit", from_entry = "Long Entry", stop = longStopPrice, limit = longTargetPrice)
+    alert("NIFTY BUY Signal Triggered @ " + str.tostring(close) + " | SL: " + str.tostring(longStopPrice) + " | Target: " + str.tostring(longTargetPrice), alert.freq_once_per_bar_close)
+
+// Short Trade
+if enterShort and strategy.position_size == 0
+    shortStopPrice   := close + (atrVal * slAtrMultiplier)
+    shortTargetPrice := close - ((shortStopPrice - close) * rrRatio)
+    strategy.entry("Short Entry", strategy.short)
+    strategy.exit("Short Exit", from_entry = "Short Entry", stop = shortStopPrice, limit = shortTargetPrice)
+    alert("NIFTY SELL Signal Triggered @ " + str.tostring(close) + " | SL: " + str.tostring(shortStopPrice) + " | Target: " + str.tostring(shortTargetPrice), alert.freq_once_per_bar_close)
+
+// Dynamic Reversal Exit (Supertrend flip)
+if strategy.position_size > 0 and exitOnSupertrendFlip and stBearish
+    strategy.close("Long Entry", comment = "Supertrend Bearish Exit")
+    alert("NIFTY Long Position Exited on Supertrend Bearish Flip @ " + str.tostring(close), alert.freq_once_per_bar_close)
+
+if strategy.position_size < 0 and exitOnSupertrendFlip and stBullish
+    strategy.close("Short Entry", comment = "Supertrend Bullish Exit")
+    alert("NIFTY Short Position Exited on Supertrend Bullish Flip @ " + str.tostring(close), alert.freq_once_per_bar_close)
+
+// Intraday Session Square-off
+if isSquareOffTime and strategy.position_size != 0
+    strategy.close_all(comment = "Intraday Square-off (15:15 IST)")
+    alert("NIFTY Intraday Square-off executed @ " + str.tostring(close), alert.freq_once_per_bar_close)
+
+// =============================================================================
+// 5. VISUAL PLOTS
+// =============================================================================
+plot(fastEma, "Fast EMA (9)", color = color.new(color.blue, 0), linewidth = 1)
+plot(slowEma, "Slow EMA (21)", color = color.new(color.orange, 0), linewidth = 2)
+plot(useTrendEma ? trendEma : na, "200 EMA Baseline", color = color.new(color.purple, 0), linewidth = 2)
+plot(useVwap and timeframe.isintraday ? sessionVwap : na, "Session VWAP", color = color.new(color.yellow, 0), linewidth = 2)
+plot(stValue, "Supertrend Line", color = stDirection < 0 ? color.green : color.red, linewidth = 2)
+
+// Shapes on Chart
+plotshape(enterLong and strategy.position_size == 0, title = "Buy Entry", style = shape.triangleup, location = location.belowbar, color = color.lime, size = size.small, text = "BUY")
+plotshape(enterShort and strategy.position_size == 0, title = "Sell Entry", style = shape.triangledown, location = location.abovebar, color = color.red, size = size.small, text = "SELL")
+
+// Plot SL and Target Lines when inside position
+plot(strategy.position_size > 0 ? longStopPrice : na, "Long Stop Loss", color = color.red, style = plot.style_linebr, linewidth = 1)
+plot(strategy.position_size > 0 ? longTargetPrice : na, "Long Target (TP)", color = color.green, style = plot.style_linebr, linewidth = 1)
+plot(strategy.position_size < 0 ? shortStopPrice : na, "Short Stop Loss", color = color.red, style = plot.style_linebr, linewidth = 1)
+plot(strategy.position_size < 0 ? shortTargetPrice : na, "Short Target (TP)", color = color.green, style = plot.style_linebr, linewidth = 1)
+
+// Visual highlight of trading session window
+bgcolor(useSessionFilter and isInEntrySession ? color.new(color.blue, 96) : na, title = "Active Trading Session")
+
+isTodayExit(exitTimestamp) =>
+    year(exitTimestamp, "Asia/Kolkata") == year(time, "Asia/Kolkata") and month(exitTimestamp, "Asia/Kolkata") == month(time, "Asia/Kolkata") and dayofmonth(exitTimestamp, "Asia/Kolkata") == dayofmonth(time, "Asia/Kolkata")
+
+todayClosedProfit = 0.0
+todayClosedCount = 0
+if barstate.islast and showPnl
+    for tradeIndex = 0 to strategy.closedtrades - 1
+        if isTodayExit(strategy.closedtrades.exit_time(tradeIndex))
+            todayClosedProfit := todayClosedProfit + strategy.closedtrades.profit(tradeIndex)
+            todayClosedCount := todayClosedCount + 1
+
+todayOpenPoints = strategy.position_size > 0 ? close - strategy.position_avg_price : strategy.position_size < 0 ? strategy.position_avg_price - close : 0.0
+todayOpenInr = todayOpenPoints * math.abs(strategy.position_size)
+todayNetInr = todayClosedProfit + todayOpenInr
+
+var table pnlTable = table.new(position.top_right, 2, 5, border_width = 1)
+if barstate.islast and showPnl
+    table.clear(pnlTable, 0, 0, 1, 4)
+    table.cell(pnlTable, 0, 0, "NIFTY TODAY", text_color = color.white, bgcolor = color.new(color.navy, 10), text_size = size.normal)
+    table.cell(pnlTable, 1, 0, todayNetInr >= 0 ? "PROFIT" : "LOSS", text_color = todayNetInr >= 0 ? color.lime : color.red, bgcolor = color.new(color.black, 20), text_size = size.normal)
+    table.cell(pnlTable, 0, 1, "Closed trades", text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 1, 1, str.tostring(todayClosedCount), text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 0, 2, "Realized P&L", text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 1, 2, str.tostring(todayClosedProfit, "#.##") + " INR", text_color = todayClosedProfit >= 0 ? color.lime : color.red, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 0, 3, "Open P&L", text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 1, 3, str.tostring(todayOpenInr, "#.##") + " INR / " + str.tostring(todayOpenPoints, "#.##") + " pts", text_color = todayOpenInr >= 0 ? color.lime : color.red, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 0, 4, "Net P&L", text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 1, 4, str.tostring(todayNetInr, "#.##") + " INR", text_color = todayNetInr >= 0 ? color.lime : color.red, bgcolor = color.new(color.black, 20))

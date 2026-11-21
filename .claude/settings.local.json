@@ -10,7 +10,27 @@
       "PowerShell(python test_news_alert.py SUZLON)",
       "PowerShell(python test_news_alert.py ASHOKLEY)",
       "PowerShell(python scan_portfolio_news.py)",
-      "PowerShell(Get-ChildItem -File -Recurse | Select-Object FullName | ForEach-Object { $_.FullName.Substring\\(\\(Get-Location\\).Path.Length + 1\\) })"
+      "PowerShell(Get-ChildItem -File -Recurse | Select-Object FullName | ForEach-Object { $_.FullName.Substring\\(\\(Get-Location\\).Path.Length + 1\\) })",
+      "Bash(python *)",
+      "Bash(xargs grep -i \"KiteConnect\")",
+      "Bash(.venv/Scripts/python.exe test_watchlist_api.py)",
+      "Bash(.venv-1/Scripts/python.exe test_watchlist_api.py)",
+      "Bash(venv/bin/python test_watchlist_api.py)",
+      "Bash(.venv/Scripts/python.exe *)",
+      "Bash(.deploy_to_vm.bat *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Read(//c/Users/Siva Kumar/.claude-omniroute/skills/india-scanner/**)",
+      "Bash(python3 scan.py universe)",
+      "Bash(python3 scan.py daily --min-price 50 --min-turnover 10)",
+      "Bash(python3 -c ' *)",
+      "WebFetch(domain:finance.yahoo.com)",
+      "WebFetch(domain:www.nseindia.com)",
+      "Bash(Get-ChildItem trader-in *)",
+      "Bash(Select-Object FullName)"
     ]
+  },
+  "enabledPlugins": {
+    "india-day-trader-skill@india-day-trader-skill": true
   }
 }

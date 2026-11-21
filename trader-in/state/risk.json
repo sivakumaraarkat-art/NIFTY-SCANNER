@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-08",
+  "now_ist": "2026-11-08 11:05",
+  "paper": true,
+  "currency": "INR",
+  "results": [
+    {
+      "index": 1,
+      "symbol": "IONEXCHANG",
+      "exchange": "NSE",
+      "side": "buy",
+      "product": "MIS",
+      "kind": "entry",
+      "amount": "26 shares",
+      "value_inr": 7893.6,
+      "entry_ref": 303.6,
+      "entry_ref_from": "plan",
+      "stop": 285.0,
+      "target": 340.8,
+      "risk_per_share": 18.6,
+      "charges": 8.06,
+      "max_loss": 491.66,
+      "reward_risk": 2.0,
+      "upper_circuit": null,
+      "lower_circuit": null,
+      "series": "EQ",
+      "cas": false,
+      "square_off": "15:25",
+      "session_close": "15:30",
+      "price_source": "plan",
+      "circuit_source": null,
+      "fingerprint": "6aca5e15d6fb3b63",
+      "verdict": "BLOCK",
+      "reasons": [
+        "window: the market is closed today (weekend, Sun 2026-11-08 11:05 IST)"
+      ],
+      "warnings": [
+        "IONEXCHANG has a 20% price band but no previous close to measure it from (prices.json detail.prev_close): circuit not checked"
+      ],
+      "info": [
+        "entry 303.60 (the plan's entry), stop 285.00, target 340.80: risk 18.60 a share",
+        "max loss ₹491.66 incl. ₹8.06 charges (limit ₹500), reward:risk 2.00 (min 1)",
+        "today before this: 0 of 3 trades, ₹0 of ₹1,500 daily loss"
+      ]
+    }
+  ],
+  "pass": 0,
+  "block": 1,
+  "warnings": [],
+  "cash_after": 100000.0,
+  "today": {
+    "orders_placed": 0,
+    "entries_placed": 0,
+    "loss_at_risk": 0.0
+  },
+  "checked_at": "2026-11-08T05:35:16Z",
+  "orders_file": "trader-in/orders.json"
+}

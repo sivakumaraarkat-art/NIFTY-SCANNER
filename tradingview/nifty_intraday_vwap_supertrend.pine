@@ -1,0 +1,33 @@
+//@version=6
+indicator("NIFTY Intraday VWAP + Supertrend", overlay = true)
+
+atrLength = input.int(10, "Supertrend ATR Length", minval = 1)
+atrFactor = input.float(3.0, "Supertrend Factor", minval = 0.1, step = 0.1)
+rsiLength = input.int(14, "RSI Length", minval = 1)
+volumeLength = input.int(20, "Volume Average Length", minval = 1)
+useVolumeFilter = input.bool(true, "Require Above-Average Volume")
+isIntraday = timeframe.isintraday
+
+[supertrendLine, trendDirection] = ta.supertrend(atrFactor, atrLength)
+sessionVwap = ta.vwap(hlc3)
+rsiValue = ta.rsi(close, rsiLength)
+averageVolume = ta.sma(volume, volumeLength)
+volumeConfirmed = not useVolumeFilter or (not na(volume) and not na(averageVolume) and volume >= averageVolume)
+
+bullishSetup = isIntraday and close > sessionVwap and trendDirection < 0 and rsiValue > 50 and volumeConfirmed
+bearishSetup = isIntraday and close < sessionVwap and trendDirection > 0 and rsiValue < 50 and volumeConfirmed
+bullishSignal = bullishSetup and not bullishSetup[1] and barstate.isconfirmed
+bearishSignal = bearishSetup and not bearishSetup[1] and barstate.isconfirmed
+
+plot(isIntraday ? sessionVwap : na, "Session VWAP", color = color.orange, linewidth = 2)
+plot(supertrendLine, "Supertrend", color = trendDirection < 0 ? color.lime : color.red, linewidth = 2)
+
+var table timeframeWarning = table.new(position.top_right, 1, 1)
+if barstate.islast
+	table.cell(timeframeWarning, 0, 0, isIntraday ? "" : "Intraday signals: switch to 5m or 15m", text_color = color.white, bgcolor = isIntraday ? color.new(color.black, 100) : color.orange)
+
+plotshape(bullishSignal, title = "Bullish Bias", style = shape.labelup, location = location.belowbar, color = color.green, text = "LONG BIAS", textcolor = color.white, size = size.tiny)
+plotshape(bearishSignal, title = "Bearish Bias", style = shape.labeldown, location = location.abovebar, color = color.red, text = "SHORT BIAS", textcolor = color.white, size = size.tiny)
+
+alertcondition(bullishSignal, title = "NIFTY Bullish Intraday Bias", message = "NIFTY bullish setup: close above session VWAP, Supertrend bullish, RSI above 50, and volume filter passed.")
+alertcondition(bearishSignal, title = "NIFTY Bearish Intraday Bias", message = "NIFTY bearish setup: close below session VWAP, Supertrend bearish, RSI below 50, and volume filter passed.")

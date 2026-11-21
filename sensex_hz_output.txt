@@ -1,0 +1,9 @@
+==================================================================================
+🔥 STAGE 10 V14.7 — BSE SENSEX HERO-ZERO EXPIRY SCANNER (THURSDAY EXPIRY)
+🤖 TELEGRAM BOT: @Nifty_stage10_paper_bot
+==================================================================================
+
+=== [DRY RUN PREVIEW - SENSEX HERO ZERO] ===
+#1 SENSEX 81700 CE | Sym: SENSEX26112181700CE | Entry: 25.0 | SL: 12.5 | T1: 50.0 | T2: 100.0 | Catalyst: BULLISH BREAKOUT 🚀
+
+✅ Scan execution logged to: logs/sensex_hero_zero_20261121_144405.json

@@ -946,15 +946,25 @@ def create_master_excel():
     ws4.column_dimensions["D"].width = 22
     ws4.column_dimensions["E"].width = 24
 
-    # Save to Shared Folder
-    wb.save(OUTPUT_FILE)
-    print(f"✅ Successfully created Master Excel in shared folder: {OUTPUT_FILE}")
+    # Save to Shared Folder with Lock Safety
+    saved_path = OUTPUT_FILE
+    try:
+        wb.save(OUTPUT_FILE)
+        print(f"✅ Successfully created Master Excel in shared folder: {OUTPUT_FILE}")
+    except PermissionError:
+        saved_path = SHARED_DIR / f"NiftyScanner_Master_Schedule_and_Trading_Matrix_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        wb.save(saved_path)
+        print(f"⚠️ Primary file '{OUTPUT_FILE.name}' is open in Excel. Saved updated version to: {saved_path}")
 
     # Also keep a copy in NIFTY-SCANNER repo for GitHub sync
-    nifty_scanner_copy = Path("D:/NIFTY-SCANNER/NiftyScanner_Master_Schedule_and_Trading_Matrix.xlsx")
+    target_dir = Path("D:/NiftyScanner/NIFTY-SCANNER")
+    if not target_dir.exists():
+        target_dir = Path("D:/NIFTY-SCANNER")
+    nifty_scanner_copy = target_dir / "NiftyScanner_Master_Schedule_and_Trading_Matrix.xlsx"
     try:
-        shutil.copy2(OUTPUT_FILE, nifty_scanner_copy)
-        print(f"✅ Synchronized copy to: {nifty_scanner_copy}")
+        if target_dir.exists():
+            shutil.copy2(saved_path, nifty_scanner_copy)
+            print(f"✅ Synchronized copy to: {nifty_scanner_copy}")
     except Exception as exc:
         print(f"Note: Could not copy to NIFTY-SCANNER: {exc}")
 

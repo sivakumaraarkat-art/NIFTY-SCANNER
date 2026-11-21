@@ -1,0 +1,4 @@
+======================================================================
+🚀 WEEKLY 10%+ BREAKOUT SCANNER (LAUNCHPAD ENGINE)
+======================================================================
+❌ Kite connection error: No module named 'kiteconnect'

@@ -64,7 +64,7 @@ FO_STOCKS: dict[str, list[str]] = {
     "TATAMOTORS":  ["Tata Motors", "TATAMOTORS"],
     "MARUTI":      ["Maruti Suzuki", "Maruti", "MSIL"],
     "SUNPHARMA":   ["Sun Pharma", "Sun Pharmaceutical", "SUNPHARMA"],
-    "TITAN":       ["Titan Company", "Titan", "TITAN"],
+    "TITAN":       ["Titan Company", "Titan Ltd", r"\bTITAN\b", r"\bTitan\s+(?:shares?|stocks?|jewell?ery|watches?|eyecare)\b"],
     "HCLTECH":     ["HCL Tech", "HCL Technologies", "HCLTECH"],
     "WIPRO":       ["Wipro", "WIPRO"],
     "TATASTEEL":   ["Tata Steel", "TATASTEEL"],
@@ -110,7 +110,7 @@ FO_STOCKS: dict[str, list[str]] = {
     "BHEL":        ["Bharat Heavy Electricals", r"\bBHEL\b"],
     "TRENT":       ["Trent", r"\bTRENT\b"],
     "DIXON":       ["Dixon Technologies", "DIXON"],
-    "OIL":         ["Oil India", "OIL Ltd", r"\bOIL\b"],
+    "OIL":         ["Oil India", "OIL Ltd", r"\bOil\s+India\s+(?:shares?|stocks?)?\b"],
     "SAIL":        ["Steel Authority", "SAIL India", r"\bSAIL\b"],
     "ACC":         ["ACC Limited", "ACC Cement", r"\bACC\b"],
     "NMDC":        ["NMDC", r"\bNMDC\b"],
@@ -124,6 +124,42 @@ FO_STOCKS.update({
     "PRESTIGE": ["Prestige Estates", "PRESTIGE"],
     "MCX": ["Multi Commodity Exchange", "MCX"],
     "COROMANDEL": ["Coromandel International", "COROMANDEL"],
+    # High-volume active F&O Option stocks
+    "AMBER":       ["Amber Enterprises", "AMBER"],
+    "POWERINDIA":  ["Hitachi Energy", "Power India", "POWERINDIA"],
+    "POLICYBZR":   ["Policybazaar", "PB Fintech", "POLICYBZR"],
+    "GVT&D":       ["GE Vernova T&D", "GE T&D", "GVT&D"],
+    "MOTILALOFS":  ["Motilal Oswal", "MOTILALOFS", "MOSL"],
+    "DATAPATTNS":  ["Data Patterns", "DATAPATTNS"],
+    "KALYANKJIL":  ["Kalyan Jewellers", "KALYANKJIL"],
+    "MANAPPURAM":  ["Manappuram Finance", "Manappuram", "MANAPPURAM"],
+    "ALKEM":       ["Alkem Laboratories", "Alkem Labs", "ALKEM"],
+    "PIDILITIND":  ["Pidilite Industries", "Pidilite", "PIDILITIND"],
+    "PETRONET":    ["Petronet LNG", "Petronet", "PETRONET"],
+    "SHRIRAMFIN":  ["Shriram Finance", "SHRIRAMFIN"],
+    "WAAREEENER":  ["Waaree Energies", "Waaree", "WAAREEENER"],
+    "SWIGGY":      ["Swiggy", "SWIGGY"],
+    "RVNL":        ["Rail Vikas Nigam", "RVNL"],
+    "IREDA":       ["Indian Renewable Energy", "IREDA"],
+    "PAGEIND":     ["Page Industries", "Jockey India", "PAGEIND"],
+    "VOLTAS":      ["Voltas", "VOLTAS"],
+    "RADICO":      ["Radico Khaitan", "RADICO"],
+    "MUTHOOTFIN":  ["Muthoot Finance", "MUTHOOTFIN"],
+    "MPHASIS":     ["Mphasis", "MPHASIS"],
+    "MARICO":      ["Marico", "MARICO"],
+    "JUBLFOOD":    ["Jubilant FoodWorks", "Jubilant Food", "JUBLFOOD"],
+    "LODHA":       ["Macrotech Developers", "Lodha", "LODHA"],
+    "INDHOTEL":    ["Indian Hotels", "Taj Hotels", "INDHOTEL", "IHCL"],
+    "HINDPETRO":   ["Hindustan Petroleum", "HPCL", "HINDPETRO"],
+    "HINDUNILVR":  ["Hindustan Unilever", "HUL", "HINDUNILVR"],
+    "GLENMARK":    ["Glenmark Pharmaceuticals", "Glenmark", "GLENMARK"],
+    "FORCEMOT":    ["Force Motors", "FORCEMOT"],
+    "ENRIN":       ["Siemens Energy", "ENRIN"],
+    "BDL":         ["Bharat Dynamics", "BDL"],
+    "ASHOKLEY":    ["Ashok Leyland", "ASHOKLEY"],
+    "ABCAPITAL":   ["Aditya Birla Capital", "ABCAPITAL"],
+    "NHPC":        ["NHPC Limited", "NHPC"],
+    "SYRMA":       ["Syrma SGS", "SYRMA"],
 })
 FO_STOCKS["RELIANCE"] = ["Reliance Industries", "RIL", "RELIANCE"]
 FO_STOCKS["KOTAKBANK"] = ["Kotak Mahindra Bank", "Kotak Bank", "KOTAKBANK"]
@@ -278,6 +314,7 @@ def fetch_rss_feed(url: str, max_retries: int = 2) -> list[dict]:
             if not entries:
                 entries = root.findall('.//{http://www.w3.org/2005/Atom}entry') or root.findall('.//entry')
             items = []
+            no_date_count = 0
             for entry in entries:
                 title = _find_first_child(entry, ['title', '{http://www.w3.org/2005/Atom}title'])
                 if title is None or not title.text:
@@ -287,17 +324,40 @@ def fetch_rss_feed(url: str, max_retries: int = 2) -> list[dict]:
                 pub = _find_first_child(entry, ['pubDate', 'pubdate', '{http://purl.org/dc/elements/1.1/}date', 'date', 'published', '{http://www.w3.org/2005/Atom}published'])
                 updated = _find_first_child(entry, ['updated', '{http://www.w3.org/2005/Atom}updated'])
                 source = entry.find('source')
+                pub_dt = parse_datetime_robust(pub.text if pub is not None else None)
+                if pub_dt is None:
+                    no_date_count += 1
                 items.append({
                     'title': clean_text(title.text),
                     'link': (link.get('href', '') or link.text or '').strip() if link is not None else '',
                     'description': clean_text(desc.text or '') if desc is not None else '',
-                    'published': parse_datetime_robust(pub.text if pub is not None else None),
+                    'published': pub_dt,
                     'updated': parse_datetime_robust(updated.text if updated is not None else None),
                     'timestamp_kind': 'published',
                     'publisher_url': source.get('url', '') if source is not None else '',
                     'publisher_name': clean_text(source.text or '') if source is not None else '',
                 })
-            FETCH_STATUS[url] = {'ok': True, 'items': len(items)}
+            dated_count = len(items) - no_date_count
+            if len(entries) == 0:
+                status = 'EMPTY_FEED'
+                is_ok = True
+            elif dated_count == 0 and no_date_count > 0:
+                status = 'NO_USABLE_DATES'
+                is_ok = False
+            elif dated_count > 0:
+                status = 'OK'
+                is_ok = True
+            else:
+                status = 'HEALTHY_EMPTY'
+                is_ok = True
+
+            FETCH_STATUS[url] = {
+                'ok': is_ok,
+                'fetched': len(entries),
+                'dated': dated_count,
+                'rejected_no_date': no_date_count,
+                'status': status
+            }
             return items
         except (requests.RequestException, ET.ParseError, ValueError) as exc:
             error = str(exc)
@@ -312,8 +372,10 @@ def fetch_rss_feed(url: str, max_retries: int = 2) -> list[dict]:
 # EXTRACT SENTIMENT FROM TEXT
 # ──────────────────────────────────────────────────────────────
 def extract_sentiment(text: str) -> str:
-    """Detect bullish and bearish catalysts with balanced coverage and context-aware negation."""
-    value = clean_text(text).lower()
+    """Detect bullish and bearish catalysts with clause-level context and denial handling."""
+    value = clean_text(text)
+    if not value:
+        return 'neutral'
 
     # Direct high-impact Bearish catalysts (SEBI/RBI actions, data breaches, probes, fraud, defaults, downgrades)
     critical_negative = [
@@ -327,41 +389,75 @@ def extract_sentiment(text: str) -> str:
         r'\b(?:downgrade[ds]?|underperform|underweight|sell\s+rating|target\s+cut|slashes?\s+target)\b',
         r'\b(?:net\s+loss|losses?\s+widen|widened\s+loss|guidance\s+cut|profit\s+warning)\b',
         r'\b(?:plant\s+shutdown|operations?\s+halted|fatal\s+accident|fire\s+incident)\b',
-        r'\b(?:falls?|drops?|slumps?|tumbles?|down)\s+despite\b',
+        r'\b(?:falls?|drops?|slumps?|tumbles?|down)\s+(?:[\w%]+\s+){0,3}despite\b',
     ]
 
     # General directional patterns
     positive = [
         r'\bbullish\b',
-        r'\b(?:profit|revenue|sales|pat|net\s+profit)\s+(?:rises?|rose|jumps?|surges?|grows?|up|growth|climbs?)\b',
+        r'\b(?:profit|revenue|sales|pat|net\s+profit|ebitda)\s+(?:rises?|rose|jumps?|surges?|grows?|up|growth|climbs?|beats?)\b',
         r'\b(?:beats?|beat)\s+(?:estimates?|expectations?)\b',
-        r'\b(?:secures?|bags?|wins?|won)\s+(?:a\s+|an\s+|major\s+|new\s+)*(?:order|contract)\b',
+        r'\b(?:secures?|bags?|wins?|won)\s+(?:[\w$₹.]+\s+)*(?:order|contract|deal)\b',
         r'\b(?:upgrade[ds]?|outperform|overweight)\b',
-        r'\b(?:target\s+raised|raises?\s+target|buy\s+rating)\b',
-        r'\b(?:order\s+between|large\s+order|binding\s+mou|joint\s+venture|deal\s+win|stake\s+buy)\b',
+        r'\b(?:target\s+raised|raises?\s+target|buy\s+rating|buy\s+call)\b',
+        r'\b(?:maintains?|gives?|reiterates?|initiates?)\s+(?:a\s+)?(?:\'buy\'|"buy"|buy)\b',
+        r'\b(?:buy\s+[A-Za-z0-9&.\s]+[;:–-]?\s*target|target\s+of\s+rs|sees\s+\d+%\s+upside)\b',
+        r'\b(?:order\s+between|large\s+order|binding\s+mou|joint\s+venture|deal\s+win|stake\s+buy|order\s+win)\b',
+        r'\b(?:shares?|stocks?|prices?)\s+(?:\w+\s+)*(?:surges?|soars?|jumps?|rallies|rally|climbs?|gains?|rises?|rose|hits?\s+(?:new|fresh|record|52-week|all-time)\s+high)\b',
+        r'\b(?:all-time|52-week|record|multi-year|fresh)\s+highs?\b',
+        r'\b(?:margin\s+expansion|strong\s+q[1-4]|robust\s+growth|turnaround)\b',
+        r'\b(?:bonus\s+issue|stock\s+split|share\s+buyback)\b',
     ]
     negative = [
         r'\bbearish\b',
         r'\b(?:profit|revenue|sales|pat|net\s+profit)\s+(?:falls?|fell|drops?|dropped|plunges?|slumps?|declines?|tumbles?|crashes?|down)\b',
         r'\b(?:misses?|missed)\s+(?:estimates?|expectations?)\b',
-        r'\b(?:margin\s+contraction|margin\s+squeeze|margin\s+pressure)\b',
+        r'\b(?:margins?\s+(?:contraction|squeeze|pressure|contracts?|drops?|falls?))\b',
         r'\b(?:shares?|stocks?|prices?)\s+(?:\w+\s+)*(?:plunges?|slumps?|tumbles?|crashes?|tanks?|dives?|cracks?|falls?|drops?|down)\b',
         r'\b(?:probe|penalty|fined|penalized|lawsuit|dispute|curbs|ban)\b',
     ]
 
-    # Check for direct critical negative triggers first
-    has_crit_neg = any(re.search(p, value) for p in critical_negative)
+    denial_pattern = r'\b(?:denies?|denied|dismisses?|refutes?|cleared\s+of|no\s+evidence\s+of|untrue|false\s+allegation|rules?\s+out|rejects?)\b'
+    negated_positive = r'\b(?:not|no|never|unlikely\s+to|without|fails?\s+to|denies?|denied|refutes?|rules?\s+out|rejects?)\s+(?:\w+\s+){0,3}(?:grow|growth|rise|jump|beat|outperform|win|bag|gain|buy|bullish|expand)\b'
+    negated_negative = r'\b(?:not|no|never|denies?|cleared\s+of|refutes?|no\s+evidence\s+of|rules?\s+out)\s+(?:\w+\s+){0,3}(?:fall|drop|miss|plunge|breach|fraud|default|probe|penalty|guilty|scam|warning)\b'
 
-    # Contextual negation: only neutralizes if directly negating direction (e.g. "not bullish", "no profit growth")
-    negated_positive = bool(re.search(r'\b(?:not|no|never|unlikely\s+to|without)\s+(?:grow|growth|rise|jump|beat|outperform|win|bag|gain|buy|bullish)\b', value))
-    negated_negative = bool(re.search(r'\b(?:not|no|never|denies|cleared\s+of)\s+(?:fall|drop|miss|plunge|breach|fraud|default|probe|penalty)\b', value))
+    def score_clause(c: str) -> str:
+        cl = c.lower().strip()
+        is_denial = bool(re.search(denial_pattern, cl))
+        has_crit = any(re.search(p, cl) for p in critical_negative)
+        neg_pos = bool(re.search(negated_positive, cl))
+        neg_neg = bool(re.search(negated_negative, cl))
 
-    pos = any(re.search(p, value) for p in positive) and not negated_positive
-    neg = (has_crit_neg or any(re.search(p, value) for p in negative)) and not negated_negative
+        pos = any(re.search(p, cl) for p in positive) and not neg_pos
+        neg = (has_crit or any(re.search(p, cl) for p in negative)) and not neg_neg
 
-    if has_crit_neg and not negated_negative:
+        if has_crit and not neg_neg:
+            return 'bearish'
+        if neg and not pos:
+            return 'bearish'
+        if pos and not neg:
+            return 'bullish'
+        if is_denial:
+            return 'disputed'
+        return 'neutral'
+
+    # Split on contrastive conjunctions, clause-joining 'and', or punctuation to isolate independent claims
+    clauses = [c.strip() for c in re.split(r'\b(?:and|but|however|although|whereas|while)\b|[;,]', value, flags=re.I) if c.strip()]
+    votes = [score_clause(c) for c in clauses]
+    bull_count = votes.count('bullish')
+    bear_count = votes.count('bearish')
+    disputed_count = votes.count('disputed')
+
+    # If contrasting signals exist (e.g. profit rises but guidance cut), flag as neutral/conflicting
+    if bull_count > 0 and bear_count > 0:
+        return 'neutral'
+    if bear_count > 0:
         return 'bearish'
-    return 'bullish' if pos and not neg else 'bearish' if neg and not pos else 'neutral'
+    if bull_count > 0:
+        return 'bullish'
+    if disputed_count > 0:
+        return 'neutral'  # Denials alone are treated as neutral/disputed, not bearish crimes
+    return 'neutral'
 
 
 # ──────────────────────────────────────────────────────────────
@@ -407,13 +503,20 @@ def aggregate_results(rss_results: dict, twitter_results: dict) -> dict:
     result = {}
     now = datetime.now(timezone.utc)
     for symbol, articles in grouped.items():
-        seen = set()
+        seen_keys = set()
+        seen_urls = set()
         unique = []
         for article in articles:
-            # Duplicate coverage has one vote, regardless of feed or publisher.
+            # Normalize URL to strip tracking tokens (utm_, ref, src)
+            raw_url = article.url or ''
+            clean_url = re.sub(r'([?&])(?:utm_[^&]+|ref=[^&]+|src=[^&]+)', '', raw_url).rstrip('?&')
             key = headline_key(article.title)
-            if key not in seen:
-                seen.add(key)
+
+            # Duplicate coverage has one vote, regardless of feed or publisher
+            if key not in seen_keys and (not clean_url or clean_url not in seen_urls):
+                seen_keys.add(key)
+                if clean_url:
+                    seen_urls.add(clean_url)
                 unique.append(article)
         if not unique:
             continue
@@ -445,7 +548,9 @@ def analyze_sentiment_and_reason(symbol: str, data: dict) -> dict:
              'business-standard.com','thehindubusinessline.com','moneycontrol.com',
              'cnbctv18.com','bbc.co.uk','bbc.com','cnbc.com'}
     publishers = sorted(set(a.publisher for a in items if a.publisher))
-    has_trusted = any(p in known for p in publishers)
+    supporting_publishers = sorted(set(a.publisher for a in (relevant or items) if a.publisher))
+    top_publisher_trusted = (top.publisher in known) if top and top.publisher else False
+    has_trusted = top_publisher_trusted or (any(p in known for p in supporting_publishers) if direction != 'NEUTRAL' else any(p in known for p in publishers))
     # Independent verification is not possible from search headlines alone.
     badge = 'CONFLICTING' if conflicting else 'MEDIUM' if has_trusted else 'LOW'
     confidence = 'CONFLICTING (Mixed coverage)' if conflicting else 'MEDIUM (Known publisher; event unverified)' if has_trusted else 'LOW (Unverified publisher / social / aggregator)'
@@ -459,6 +564,8 @@ def analyze_sentiment_and_reason(symbol: str, data: dict) -> dict:
             'catalyst_category':category, 'short_explanation':reason,
             'top_headline':top.title if top else '', 'top_headline_url':top.url if top else '',
             'top_headline_published_at':pub.isoformat() if pub else None,
+            'supporting_publisher': top.publisher if top else '',
+            'supporting_publisher_trusted': top_publisher_trusted,
             'latest_coverage_at':latest.published.isoformat() if latest else None,
             'primary_sources':', '.join(publishers) or 'Unknown', 'unique_sources':len(publishers),
             'mentions':len(items), 'has_tier1':has_trusted, 'is_conflicting':conflicting,
@@ -506,26 +613,44 @@ def generate_sentiment_excel(results: dict, hours: int, output_dir: Path = Path(
 # ──────────────────────────────────────────────────────────────
 # SAVE EXECUTION LOG
 # ──────────────────────────────────────────────────────────────
-def save_execution_log(results: dict, hours: int, output_dir: Path = Path('logs'), today_only: bool = False) -> str:
+def save_execution_log(results: dict, hours: int, output_dir: Path = Path('logs'), today_only: bool = False, feed_success: int = 1) -> str:
     output_dir.mkdir(parents=True,exist_ok=True)
     enriched={}
+    now=datetime.now(timezone.utc)
     for symbol,data in results.items():
         analysis=analyze_sentiment_and_reason(symbol,data)
+        direction = data.get('sentiment', 'NEUTRAL')
+        # Measure freshness on directional evidence specifically
+        relevant = [a for a in data.get('news', []) if a.sentiment.upper() == direction] if direction != 'NEUTRAL' else data.get('news', [])
+        directional_art = max(relevant, key=lambda a: a.published) if relevant else (max(data['news'], key=lambda a: a.published) if data.get('news') else None)
+        dir_age_hours = round(max(0, (now - directional_art.published).total_seconds() / 3600), 1) if directional_art else 999.0
+
         enriched[symbol]={**analysis,'avg_score':data['avg_score'],'article_count':data['count'],
+            'directional_headline': directional_art.title if directional_art else '',
+            'directional_headline_published_at': directional_art.published.isoformat() if directional_art else None,
+            'directional_age_hours': dir_age_hours,
+            'news_age_hours': dir_age_hours,
+            'is_fresh': dir_age_hours <= 24.0,
             'articles':[{**a._asdict(),'published':a.published.isoformat()} for a in data['news']]}
-    now=datetime.now(timezone.utc)
     record={'schema_version':2,'timestamp':now.isoformat(),'script':'news_scanner_with_twitter',
         'hours_scanned':hours,'today_only_ist':today_only,'symbols_found':len(results),
+        'scan_status':'SUCCESS' if feed_success > 0 else 'NETWORK_FAILED',
+        'expires_at':(now + timedelta(hours=hours)).isoformat(),
         'score_definition':'0-100 direction index, 50 neutral; recency-weighted, not a probability or trade recommendation',
         'verification':'Headline heuristics only; publisher identity is not independent event verification',
         'feed_status':dict(FETCH_STATUS),'data':enriched}
     target=output_dir/f"news_scan_twitter_{now.astimezone(IST).strftime('%Y%m%d_%H%M%S_%f')}.json"
     payload=json.dumps(record,indent=2,ensure_ascii=False)
     target.write_text(payload,encoding='utf-8')
-    latest=output_dir/'latest_news_sentiment.json'
-    temp=output_dir/'latest_news_sentiment.tmp.json'
-    temp.write_text(payload,encoding='utf-8')
-    temp.replace(latest)
+
+    # Keep JSON and Excel consistent: update latest if feeds succeeded (even if 0 matches found)
+    if feed_success > 0:
+        latest=output_dir/'latest_news_sentiment.json'
+        temp=output_dir/'latest_news_sentiment.tmp.json'
+        temp.write_text(payload,encoding='utf-8')
+        temp.replace(latest)
+    else:
+        logger.warning('Total feed failure (%d feeds ok). Preserving existing latest_news_sentiment.json to prevent downstream crash.', feed_success)
     return str(target)
 
 
@@ -547,8 +672,8 @@ def main():
     rss=scan_rss_feeds(args.hours,args.today_only)
     social={} if args.skip_social else scan_twitter_sentiment(args.hours,args.today_only)
     combined=aggregate_results(rss,social)
-    log=save_execution_log(combined,args.hours,args.output_dir,args.today_only)
     success=sum(bool(status.get('ok')) for status in FETCH_STATUS.values())
+    log=save_execution_log(combined,args.hours,args.output_dir,args.today_only,success)
     excel=None if args.no_excel or not success else generate_sentiment_excel(combined,args.hours,args.output_dir)
     for symbol,data in sorted(combined.items(),key=lambda kv:abs(kv[1]['avg_score']-50),reverse=True):
         if 2*abs(data['avg_score']-50) < args.min_score:
@@ -577,15 +702,28 @@ def entity_mentions(text: str) -> list[tuple[int, int, str, str]]:
     for pattern in (r'\bL&T\s+Fin(?:ance)?\b', r'\bKotak\s+(?:MF|Mutual Fund)\b',
                     r'\bSBI\s+(?:Mutual Fund|MF|Cards?)\b', r'\bJio\s+Financial\b'):
         masked = re.sub(pattern, lambda m: ' ' * len(m.group()), masked, flags=re.I)
+
+    # Strip trailing research analyst / broker attribution so the broker isn't mistaken for the stock being covered
+    broker_attr = r'[:;–-]\s*(?:Motilal\s+Oswal|MOSL|ICICI\s+(?:Securities|Direct)|Kotak\s+(?:Securities|Equities|Institutional)|HDFC\s+Sec(?:urities)?|Axis\s+(?:Securities|Direct)|Sharekhan|Nuvama|Prabhudas\s+Lilladher|Choice\s+Broking)\b.*$'
+    masked = re.sub(broker_attr, '', masked, flags=re.I)
     hits = []
     for symbol, aliases in FO_STOCKS.items():
         for alias in aliases:
-            literal = alias[2:-2] if alias.startswith(r'\b') and alias.endswith(r'\b') else alias
-            # Short all-caps aliases, and dynamically ambiguous company tickers,
-            # require original uppercase text. Full names are case-insensitive.
-            ticker = literal.upper() == literal or literal.upper() in {'PERSISTENT', 'PRESTIGE'}
-            for match in re.finditer(r'(?<!\w)' + re.escape(literal) + r'(?!\w)', masked, 0 if ticker else re.I):
-                hits.append((match.start(), match.end(), symbol, literal))
+            is_regex = any(c in alias for c in ('(', ')', '|', '+', '*', '[', ']')) or r'\s' in alias
+            if is_regex:
+                try:
+                    pat = re.compile(alias, re.I)
+                    for match in pat.finditer(masked):
+                        hits.append((match.start(), match.end(), symbol, match.group()))
+                except re.error:
+                    pass
+            else:
+                literal = alias[2:-2] if alias.startswith(r'\b') and alias.endswith(r'\b') else alias
+                # Short all-caps aliases, and dynamically ambiguous company tickers,
+                # require original uppercase text. Full names are case-insensitive.
+                ticker = literal.upper() == literal or literal.upper() in {'PERSISTENT', 'PRESTIGE'}
+                for match in re.finditer(r'(?<!\w)' + re.escape(literal) + r'(?!\w)', masked, 0 if ticker else re.I):
+                    hits.append((match.start(), match.end(), symbol, literal))
     selected = []
     for hit in sorted(hits, key=lambda h: (-(h[1]-h[0]), h[0], h[2])):
         if not any(hit[0] < h[1] and h[0] < hit[1] for h in selected):
@@ -618,9 +756,20 @@ def publisher_identity(item: dict, feed_url: str) -> str:
     }
     return groups.get(host, host)
 
+KNOWN_PUBLISHER_SUFFIXES = re.compile(
+    r'\s+[-–—|]\s+(?:'
+    r'moneycontrol(?:\.com)?|livemint(?:\.com)?|et\s+now|(?:the\s+)?economic\s+times|'
+    r'ndtv\s+profit|reuters|business\s+standard|cnbc[- ]tv18|cnbc|'
+    r'bloomberg|zee\s+business|financial\s+express|(?:the\s+)?hindu(?:\s+business\s+line)?|'
+    r'business\s+today|news18|ndtv|x|twitter|yahoo\s+finance|'
+    r'equitymaster|business\s+upturn|scanx(?:\.trade)?|solarquarter|bq\s+prime|news9live'
+    r')\s*$', re.I
+)
+
 def headline_key(title: str) -> str:
-    title = re.sub(r'\s+[-–—]\s+[^-–—]+$', '', clean_text(title))
-    return re.sub(r'[^\w]+', '', title.lower())
+    cleaned = clean_text(title)
+    cleaned = KNOWN_PUBLISHER_SUFFIXES.sub('', cleaned)
+    return re.sub(r'[^\w]+', '', cleaned.lower())
 
 def scan_sources(sources: list[tuple[str, str]], hours: int, today_only: bool = False) -> dict:
     now = datetime.now(timezone.utc)
@@ -661,16 +810,17 @@ def catalyst_for(article: NewsItem | None) -> tuple[str, str]:
     if len(match_symbols(title)) > 1:
         return 'Multiple companies', 'Headline mentions several companies; review the original article for attribution.'
     rules = [
+        (r'\b(?:denies?|denied|dismisses?|refutes?|cleared\s+of|no\s+evidence\s+of|rules?\s+out)\b', 'Disputed / Denial', 'Headline reports company denial, rebuttal or dismissal; treat underlying event as disputed.'),
         (r'\bdividend\b', 'Dividend', 'Headline reports dividend-related news; check the amount, dates and filing.'),
         (r'\b(?:joint venture|JV)\b', 'Joint venture', 'Headline reports joint-venture-related news.'),
-        (r'\b(?:secures?|bags?|wins?|won)\s+(?:a\s+|an\s+|major\s+|new\s+)*(?:order|contract)\b', 'Order / contract', 'Headline reports an order or contract win.'),
+        (r'\b(?:secures?|bags?|wins?|won)\s+(?:[\w$₹.]+\s+)*(?:order|contract|deal)\b', 'Order / contract', 'Headline reports an order or contract win.'),
         (r'\b(?:results?|earnings|profit|revenue|Q[1-4]|pat)\b', 'Earnings / results', 'Headline discusses earnings; expectations and margins require separate verification.'),
         (r'\b(?:data\s+breach|data\s+leak|cyber\s*attack|dark\s*web|hacked)\b', 'Cybersecurity / Breach', 'Headline reports cybersecurity incident, data breach or dark web customer data exposure.'),
         (r'\b(?:probe|raid|searches|sebi|ed|cbi|rbi|penalty|fine|investigation|notice|curbs|ban|lawsuit)\b', 'Legal / regulatory', 'Headline reports regulatory action, probe or penalty.'),
         (r'\b(?:auditor|cfo|ceo|md)\s+(?:resigns?|resigned|quits?|fired|ousted)\b', 'Governance / Resignation', 'Headline reports key executive or auditor resignation.'),
         (r'\b(?:default|defaults|insolvency|nclt|bankruptcy|debt\s+distress)\b', 'Debt / Solvency', 'Headline reports debt distress, default or insolvency concerns.'),
-        (r'\b(?:upgrade|downgrade|rating|target price|target cut|target raised)\b', 'Broker commentary', 'Headline reports broker commentary.'),
-        (r'\b(?:rally|shares rise|shares fall|plunges|tumbles|slumps)\b', 'Price commentary', 'Headline describes price movement; no technical breakout is verified.'),
+        (r'\b(?:upgrade|downgrade|rating|target price|target cut|target raised|buy rating|buy call|target of rs|maintains buy)\b', 'Broker commentary', 'Headline reports broker commentary.'),
+        (r'\b(?:rally|shares rise|shares fall|plunges|tumbles|slumps|surges|jumps|hits? new high|52-week high|record high)\b', 'Price commentary', 'Headline describes price movement; no technical breakout is verified.'),
     ]
     for pattern, category, explanation in rules:
         if re.search(pattern, title, re.I):

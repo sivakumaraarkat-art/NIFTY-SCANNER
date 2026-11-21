@@ -13,6 +13,9 @@ CRON_TZ=Asia/Kolkata
 # 3. 08:30 AM (Mon-Fri): Pre-Market News Catalyst Scanner (For Intraday)
 30 08 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 48 >> /home/ubuntu/NiftyScanner/cron_logs/cron_news_am.log 2>&1
 
+# 3b. 08:45 AM (Mon-Fri): PRE-MARKET PORTFOLIO NEWS (Yesterday 15:40 → Today 09:00 IST)
+45 08 * * 1-5 cd /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 portfolio_peak_exit_guard.py --use-demat --pre-market-news >> /home/ubuntu/NiftyScanner/cron_logs/cron_portfolio_pre_market_news.log 2>&1
+
 # 4. 09:00 AM (Mon-Fri): NIFTY V14.9 Paper Trading Engine
 00 09 * * 1-5 /home/ubuntu/NiftyScanner/nifty_v14_7/run_NIFTY_V14_9_CRON.sh >> /home/ubuntu/NiftyScanner/nifty_v14_7/logs/cron_v14_9.log 2>&1
 
@@ -22,14 +25,14 @@ CRON_TZ=Asia/Kolkata
 # 6. 09:15 AM (Mon-Fri): Portfolio Peak Guard Continuous Sentinel
 15 09 * * 1-5 /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD/run_continuous_monitor.sh >> /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD/logs/cron_sentinel.log 2>&1
 
-# 7. Intraday News Catalyst Refresh (Runs at 09:35 AM and hourly at :45)
+# 7. Intraday News Catalyst Refresh (Runs 5 min prior to every options scan: 09:35 AM, then :15 and :45)
 35 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 12 >> /home/ubuntu/NiftyScanner/cron_logs/cron_news_intraday.log 2>&1
-45 10-14 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 12 >> /home/ubuntu/NiftyScanner/cron_logs/cron_news_intraday.log 2>&1
+15,45 10-14 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 12 >> /home/ubuntu/NiftyScanner/cron_logs/cron_news_intraday.log 2>&1
 
-# 8. Options Intraday Scan (09:50 AM, then every 1 hour at :50 until 02:50 PM, Min Score 60)
+# 8. Options Intraday Scan (Every 30 Minutes: 09:50 AM, then :20 and :50 from 10:00 to 14:50, Max 2 Trades per Scan, Min Score 90, Max 10 Trades/Day)
 # FIX: flock -w 300 waits up to 5 min for lock instead of -n which silently drops runs
-50 09 * * 1-5 flock -w 300 /tmp/intraday_scan.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 60 >> /home/ubuntu/NiftyScanner/cron_logs/cron_intraday.log 2>&1'
-50 10-14 * * 1-5 flock -w 300 /tmp/intraday_scan.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 60 >> /home/ubuntu/NiftyScanner/cron_logs/cron_intraday.log 2>&1'
+50 09 * * 1-5 flock -w 300 /tmp/intraday_scan.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 90 --max-daily-trades 10 >> /home/ubuntu/NiftyScanner/cron_logs/cron_intraday.log 2>&1'
+20,50 10-14 * * 1-5 flock -w 300 /tmp/intraday_scan.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 90 --max-daily-trades 10 >> /home/ubuntu/NiftyScanner/cron_logs/cron_intraday.log 2>&1'
 
 # 8b. MCX Crude Oil Momentum Scan (Runs daily at 10:00 AM)
 00 10 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_crude_swing_scan.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_crude.log 2>&1
@@ -49,19 +52,19 @@ CRON_TZ=Asia/Kolkata
 # ==============================================================================
 # HERO-ZERO EXPIRY QUALITY SCANNERS & 3:50 PM SUMMARY (Delivered to @Nifty_stage10_paper_bot)
 # ==============================================================================
-# 10a. NIFTY Expiry Hero-Zero Quality Strikes (Tuesdays from 02:00 PM onwards: 14:00, 14:30, 15:00, 15:05, 15:10)
-00,30 14 * * 2 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
-00,05,10 15 * * 2 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
+# 10a. NIFTY Expiry Hero-Zero (Mondays & Tuesdays: Telegram Alerts at 14:00, 14:30, 15:00, 15:05, 15:10 | Automated Zerodha GTT ONLY at 14:30 and 15:05)
+00,30 14 * * 1,2 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py --force >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
+00,05,10 15 * * 1,2 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py --force >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
 
-# 10b. SENSEX Expiry Hero-Zero Quality Strikes (Thursdays from 02:00 PM onwards: 14:00, 14:30, 15:00, 15:05, 15:10)
-00,30 14 * * 4 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
-00,05,10 15 * * 4 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
+# 10b. SENSEX Expiry Hero-Zero (Thursdays: Telegram Alerts at 14:00, 14:30, 15:00, 15:05, 15:10 | Automated Zerodha GTT ONLY at 14:30 and 15:05)
+00,30 14 * * 4 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py --min-prem 8.0 --max-prem 15.0 --lots 4 --capital 1500 >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
+00,05,10 15 * * 4 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py --min-prem 8.0 --max-prem 15.0 --lots 4 --capital 1500 >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
 
-# 10c. 03:50 PM Hero-Zero Expiry Final Settlement & Performance Summary (Tuesdays & Thursdays to Telegram)
-50 15 * * 2,4 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/hero_zero_350pm_summary.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_hero_zero_summary.log 2>&1
+# 10c. 03:50 PM Hero-Zero Expiry Final Settlement & Performance Summary (Mondays, Tuesdays & Thursdays to Telegram)
+50 15 * * 1,2,4 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/hero_zero_350pm_summary.py --force >> /home/ubuntu/NiftyScanner/cron_logs/cron_hero_zero_summary.log 2>&1
 
-# 11. 03:00 PM (Mon-Fri): BTST Options Scan (Stocks & NIFTY + SENSEX)
-00 15 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 50 >> /home/ubuntu/NiftyScanner/cron_logs/cron_btst.log 2>&1
+# 11. 03:00 PM (Mon-Fri): BTST Options Scan (Stocks & NIFTY + SENSEX, Min Score 85)
+00 15 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 85 >> /home/ubuntu/NiftyScanner/cron_logs/cron_btst.log 2>&1
 
 # 12. 04:00 PM (Mon-Fri): Intraday Options Stock P&L Summary Report
 00 16 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/daily_4pm_intraday_summary.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_intraday_4pm_summary.log 2>&1
@@ -77,4 +80,19 @@ CRON_TZ=Asia/Kolkata
 
 # B. Every Friday at 03:15 PM (Cycle End): Single Exit/Sell Evaluation & Performance Return Report
 15 15 * * 5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 run_swing_trade_system.py --close-and-audit >> /home/ubuntu/NiftyScanner/cron_logs/cron_swing_exit_audit.log 2>&1
+
+# ==============================================================================
+# 14b. WEEKLY 10%+ BREAKOUT SCANNER (HIGH-VELOCITY MONDAY LAUNCHPAD)
+# ==============================================================================
+# Scans Nifty 500 for coiled spring setups (Daily ATR >= 3.2%, base <= 3.8%, risk <= 3.5%) & sends Telegram alert
+30 09 * * 1 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_weekly_10pct_breakout_scan.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_weekly_breakout.log 2>&1
+
+# ==============================================================================
+# 14c. AUTOMATED GTT FILL & OCO PROTECTION SENTINEL (CONCORDBIO & GALLANTT)
+# ==============================================================================
+# Runs every 2 min from 09:16 to 10:30 AM (Mon-Fri): Auto-detects GTT fill & attaches OCO Exit
+16-58/2 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel.log 2>&1
+00-30/2 10 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel.log 2>&1
+
+
 

@@ -24,7 +24,9 @@ except ImportError:
 IST = ZoneInfo("Asia/Kolkata")
 LOG_DIR = Path(os.getenv("INTRADAY_LOG_DIR", "logs"))
 STATE_FILE = LOG_DIR / "intraday_trade_state.json"
+MAX_DAILY_TRADES = int(os.getenv("MAX_DAILY_TRADES", "10"))
 MARKET_CLOSE = time_type(15, 30)
+SQUARE_OFF_TIME = time_type(15, 25)
 
 
 def now_ist() -> datetime:
@@ -70,6 +72,9 @@ def load_signals(day_str: str) -> dict[str, dict[str, Any]]:
             opt_type = str(c.get("option_type", c.get("type", "CE"))).upper()
             opt_sym = c.get("option_symbol") or f"{sym}_{strike}_{opt_type}"
             if opt_sym not in signals:
+                if len(signals) >= MAX_DAILY_TRADES:
+                    # Enforce strict daily cap: do not add more than MAX_DAILY_TRADES per day
+                    continue
                 signals[opt_sym] = {
                     "option_symbol": opt_sym,
                     "symbol": sym,
@@ -140,6 +145,7 @@ def observe_trades(state: dict[str, Any], signals: dict[str, dict[str, Any]], ki
                         and time_type(9, 15) <= stamp.time() < MARKET_CLOSE):
                     valid.append((stamp, candle))
             trade["data_status"] = "minute_candles" if valid else "unavailable"
+            hit_event = False
             for stamp, candle in sorted(valid, key=lambda item: item[0]):
                 high, low = float(candle["high"]), float(candle["low"])
                 t1, t2, sl = trade["t1"], trade["t2"], trade["stop_loss"]
@@ -149,8 +155,18 @@ def observe_trades(state: dict[str, Any], signals: dict[str, dict[str, Any]], ki
                 if not (stop or target1 or target2):
                     continue
                 if stop and (target1 or target2):
-                    trade["data_status"] = "ambiguous_target_sl"
-                    trade["ambiguous_time"] = stamp.isoformat()
+                    # Conservative risk management: if target & SL in same candle, take SL exit
+                    reason, price = "SL_HIT", sl
+                    trade.update(status="CLOSED", close_reason=reason, close_price=price,
+                                 close_time=stamp.isoformat(), hit_time_source="minute_candle",
+                                 hit_time_precision="minute", observed_at=now.isoformat(),
+                                 data_status="ambiguous_resolved_conservative_sl")
+                    trade["target_reached_time"] = None
+                    entry = trade["entry_price"]
+                    trade["pnl"] = (price - entry) * trade["lots"] * trade["lot_size"]
+                    trade["pnl_pct"] = (price - entry) / entry * 100 if entry else 0.0
+                    new_events += 1
+                    hit_event = True
                     break
                 reason, price = ("SL_HIT", sl) if stop else (("T2_HIT", t2) if target2 else ("T1_HIT", t1))
                 trade.update(status="CLOSED", close_reason=reason, close_price=price,
@@ -161,7 +177,38 @@ def observe_trades(state: dict[str, Any], signals: dict[str, dict[str, Any]], ki
                 trade["pnl"] = (price - entry) * trade["lots"] * trade["lot_size"]
                 trade["pnl_pct"] = (price - entry) / entry * 100 if entry else 0.0
                 new_events += 1
+                hit_event = True
                 break
+
+            # -------------------------------------------------------------
+            # EOD SQUARE-OFF: If trade is still OPEN at or after 3:25 PM IST
+            # -------------------------------------------------------------
+            if not hit_event and trade.get("status") == "OPEN" and valid:
+                signal_dt = as_ist(trade["signal_time"])
+                is_past_square_off = (
+                    now.date() > signal_dt.date() or
+                    now.time() >= SQUARE_OFF_TIME or
+                    end.time() >= MARKET_CLOSE
+                )
+                if is_past_square_off:
+                    sq_candidates = [(st, c) for st, c in valid if st.time() <= SQUARE_OFF_TIME]
+                    sq_stamp, sq_candle = sq_candidates[-1] if sq_candidates else valid[-1]
+                    close_price = float(sq_candle["close"])
+                    trade.update(
+                        status="CLOSED",
+                        close_reason="EOD_SQUARE_OFF",
+                        close_price=close_price,
+                        close_time=sq_stamp.isoformat(),
+                        hit_time_source="minute_candle",
+                        hit_time_precision="minute",
+                        observed_at=now.isoformat(),
+                        data_status="eod_squared_off",
+                    )
+                    trade["target_reached_time"] = None
+                    entry = trade["entry_price"]
+                    trade["pnl"] = (close_price - entry) * trade["lots"] * trade["lot_size"]
+                    trade["pnl_pct"] = (close_price - entry) / entry * 100 if entry else 0.0
+                    new_events += 1
         except Exception as exc:
             trade["data_status"] = "unavailable"
             print(f"Historical data unavailable for {trade['option_symbol']}: {type(exc).__name__}")
@@ -183,11 +230,19 @@ def main() -> int:
         else:
             state["trades"][trade_id] = signal
 
+    # Optimization: If there are no open trades to observe, skip Kite connection
+    open_trades = [t for t in state.get("trades", {}).values() if t.get("status") == "OPEN"]
+    if not open_trades:
+        state["updated_at"] = now.isoformat()
+        atomic_write_json(STATE_FILE, state)
+        print(f"{now.isoformat()}: No active open trades to monitor. Skipping Kite connection; state={STATE_FILE}")
+        return 0
+
     kite = None
     try:
         kite = get_kite_client()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"⚠️ [Monitor] Kite authentication failed: {exc}")
 
     count = observe_trades(state, signals, kite, now)
     state["updated_at"] = now.isoformat()

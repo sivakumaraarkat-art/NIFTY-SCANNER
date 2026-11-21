@@ -1,0 +1,6 @@
+
+🔍 Resolving live market option strikes, quotes & Greeks for BTST...
+❌ SKIPPED: No verified NFO/BFO RELIANCE CE contract found in Zerodha instruments.
+❌ SKIPPED: No verified NFO/BFO TCS CE contract found in Zerodha instruments.
+
+⚠️ No qualified BTST candidates found matching score and theta criteria.

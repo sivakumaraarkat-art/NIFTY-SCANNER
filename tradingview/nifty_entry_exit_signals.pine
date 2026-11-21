@@ -1,0 +1,151 @@
+//@version=6
+indicator("NIFTY Entry & Exit Signal Indicator [Pine v6]", overlay = true)
+
+// =============================================================================
+// 1. INPUT PARAMETERS
+// =============================================================================
+fastEmaLen       = input.int(9, "Fast EMA Length", minval = 1, group = "Trend & Moving Averages")
+slowEmaLen       = input.int(21, "Slow EMA Length", minval = 1, group = "Trend & Moving Averages")
+useTrendEma      = input.bool(true, "Filter with 200 EMA", group = "Trend & Moving Averages")
+trendEmaLen      = input.int(200, "Trend EMA Length", minval = 1, group = "Trend & Moving Averages")
+
+useVwap          = input.bool(true, "Filter with Session VWAP (Intraday)", group = "Trend & Moving Averages")
+stAtrLen         = input.int(10, "Supertrend ATR Length", minval = 1, group = "Supertrend")
+stFactor         = input.float(3.0, "Supertrend Factor", minval = 0.5, step = 0.1, group = "Supertrend")
+
+rsiLen           = input.int(14, "RSI Length", minval = 1, group = "RSI Momentum Filter")
+rsiLongMin       = input.int(50, "Long Min RSI", minval = 1, maxval = 100, group = "RSI Momentum Filter")
+rsiShortMax      = input.int(50, "Short Max RSI", minval = 1, maxval = 100, group = "RSI Momentum Filter")
+
+atrLen           = input.int(14, "ATR Length for Targets", minval = 1, group = "Risk / Reward Parameters")
+slAtrMult        = input.float(1.5, "Stop Loss ATR Multiplier", minval = 0.5, step = 0.1, group = "Risk / Reward Parameters")
+rrRatio          = input.float(2.0, "Risk-to-Reward Ratio", minval = 1.0, step = 0.25, group = "Risk / Reward Parameters")
+lotSize          = input.int(75, "NIFTY Lot Size", minval = 1, group = "Risk / Reward Parameters")
+showPnl          = input.bool(true, "Show Today's P&L", group = "Risk / Reward Parameters")
+
+useSession       = input.bool(true, "Enable IST Session Filter (09:20 - 15:15)", group = "Session Filter (Indian Standard Time)")
+sessionRange     = input.session("0920-1515", "Trading Window (IST)", group = "Session Filter (Indian Standard Time)")
+
+// =============================================================================
+// 2. INDICATOR LOGIC
+// =============================================================================
+fastEma     = ta.ema(close, fastEmaLen)
+slowEma     = ta.ema(close, slowEmaLen)
+trendEma    = ta.ema(close, trendEmaLen)
+sessionVwap = ta.vwap(hlc3)
+[stValue, stDirection] = ta.supertrend(stFactor, stAtrLen)
+rsiVal      = ta.rsi(close, rsiLen)
+atrVal      = ta.atr(atrLen)
+
+inSession   = not useSession or not na(time(timeframe.period, sessionRange + ":23456", "Asia/Kolkata"))
+
+bullishCross = ta.crossover(fastEma, slowEma)
+bearishCross = ta.crossunder(fastEma, slowEma)
+
+longTrendCondition  = (not useTrendEma or close > trendEma) and (not (useVwap and timeframe.isintraday) or close > sessionVwap)
+shortTrendCondition = (not useTrendEma or close < trendEma) and (not (useVwap and timeframe.isintraday) or close < sessionVwap)
+
+buySignal  = inSession and barstate.isconfirmed and bullishCross and (stDirection < 0) and longTrendCondition and (rsiVal >= rsiLongMin)
+sellSignal = inSession and barstate.isconfirmed and bearishCross and (stDirection > 0) and shortTrendCondition and (rsiVal <= rsiShortMax)
+
+// State tracking for exits
+var int position = 0 // 0: Flat, 1: Long, -1: Short
+var float entryPrice = na
+var float stopLossPrice = na
+var float takeProfitPrice = na
+var float todayRealizedPoints = 0.0
+var float todayRealizedInr = 0.0
+var int todayExitCount = 0
+
+newTradingDay = ta.change(time("D", "Asia/Kolkata")) != 0
+if newTradingDay
+    todayRealizedPoints := 0.0
+    todayRealizedInr := 0.0
+    todayExitCount := 0
+
+if buySignal and position <= 0
+    position := 1
+    entryPrice := close
+    stopLossPrice := close - (atrVal * slAtrMult)
+    takeProfitPrice := close + ((close - stopLossPrice) * rrRatio)
+else if sellSignal and position >= 0
+    position := -1
+    entryPrice := close
+    stopLossPrice := close + (atrVal * slAtrMult)
+    takeProfitPrice := close - ((stopLossPrice - close) * rrRatio)
+
+// Exit Conditions
+longHitSL   = (position == 1) and (low <= stopLossPrice)
+longHitTP   = (position == 1) and (high >= takeProfitPrice)
+longStFlip  = (position == 1) and (stDirection > 0)
+exitLong    = (longHitSL or longHitTP or longStFlip) and barstate.isconfirmed
+
+shortHitSL  = (position == -1) and (high >= stopLossPrice)
+shortHitTP  = (position == -1) and (low <= takeProfitPrice)
+shortStFlip = (position == -1) and (stDirection < 0)
+exitShort   = (shortHitSL or shortHitTP or shortStFlip) and barstate.isconfirmed
+
+if exitLong
+    longExitPrice = longHitTP ? takeProfitPrice : longHitSL ? stopLossPrice : close
+    tradePoints = longExitPrice - entryPrice
+    todayRealizedPoints := todayRealizedPoints + tradePoints
+    todayRealizedInr := todayRealizedInr + (tradePoints * lotSize)
+    todayExitCount := todayExitCount + 1
+    position := 0
+
+if exitShort
+    shortExitPrice = shortHitTP ? takeProfitPrice : shortHitSL ? stopLossPrice : close
+    tradePoints = entryPrice - shortExitPrice
+    todayRealizedPoints := todayRealizedPoints + tradePoints
+    todayRealizedInr := todayRealizedInr + (tradePoints * lotSize)
+    todayExitCount := todayExitCount + 1
+    position := 0
+
+todayUnrealizedPoints = position == 1 ? close - entryPrice : position == -1 ? entryPrice - close : 0.0
+todayUnrealizedInr = todayUnrealizedPoints * lotSize
+todayNetPoints = todayRealizedPoints + todayUnrealizedPoints
+todayNetInr = todayRealizedInr + todayUnrealizedInr
+
+// =============================================================================
+// 3. CHART PLOTS
+// =============================================================================
+plot(fastEma, "Fast EMA", color = color.blue, linewidth = 1)
+plot(slowEma, "Slow EMA", color = color.orange, linewidth = 2)
+plot(useTrendEma ? trendEma : na, "200 EMA", color = color.purple, linewidth = 2)
+plot(useVwap and timeframe.isintraday ? sessionVwap : na, "VWAP", color = color.yellow, linewidth = 2)
+plot(stValue, "Supertrend", color = stDirection < 0 ? color.green : color.red, linewidth = 2)
+
+// Signal Labels
+plotshape(buySignal, title = "BUY Entry Signal", style = shape.labelup, location = location.belowbar, color = color.green, text = "BUY\nENTRY", textcolor = color.white, size = size.normal)
+plotshape(sellSignal, title = "SELL Entry Signal", style = shape.labeldown, location = location.abovebar, color = color.red, text = "SELL\nENTRY", textcolor = color.white, size = size.normal)
+
+plotshape(exitLong, title = "Exit Long Signal", style = shape.xcross, location = location.abovebar, color = color.maroon, text = "EXIT\nLONG", textcolor = color.white, size = size.small)
+plotshape(exitShort, title = "Exit Short Signal", style = shape.xcross, location = location.belowbar, color = color.navy, text = "EXIT\nSHORT", textcolor = color.white, size = size.small)
+
+// Plot dynamic levels for active position
+plot(position == 1 ? stopLossPrice : na, "Long SL", color = color.red, style = plot.style_linebr, linewidth = 1)
+plot(position == 1 ? takeProfitPrice : na, "Long Target", color = color.green, style = plot.style_linebr, linewidth = 1)
+plot(position == -1 ? stopLossPrice : na, "Short SL", color = color.red, style = plot.style_linebr, linewidth = 1)
+plot(position == -1 ? takeProfitPrice : na, "Short Target", color = color.green, style = plot.style_linebr, linewidth = 1)
+
+var table pnlTable = table.new(position.top_right, 2, 5, border_width = 1)
+if barstate.islast and showPnl
+    table.clear(pnlTable, 0, 0, 1, 4)
+    table.cell(pnlTable, 0, 0, "NIFTY TODAY", text_color = color.white, bgcolor = color.new(color.navy, 10), text_size = size.normal)
+    table.cell(pnlTable, 1, 0, todayNetInr >= 0 ? "PROFIT" : "LOSS", text_color = todayNetInr >= 0 ? color.lime : color.red, bgcolor = color.new(color.black, 20), text_size = size.normal)
+    table.cell(pnlTable, 0, 1, "Trades exited", text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 1, 1, str.tostring(todayExitCount), text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 0, 2, "Realized P&L", text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 1, 2, str.tostring(todayRealizedInr, "#.##") + " INR / " + str.tostring(todayRealizedPoints, "#.##") + " pts", text_color = todayRealizedInr >= 0 ? color.lime : color.red, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 0, 3, "Open P&L", text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 1, 3, str.tostring(todayUnrealizedInr, "#.##") + " INR / " + str.tostring(todayUnrealizedPoints, "#.##") + " pts", text_color = todayUnrealizedInr >= 0 ? color.lime : color.red, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 0, 4, "Net P&L", text_color = color.white, bgcolor = color.new(color.black, 20))
+    table.cell(pnlTable, 1, 4, str.tostring(todayNetInr, "#.##") + " INR / " + str.tostring(todayNetPoints, "#.##") + " pts", text_color = todayNetInr >= 0 ? color.lime : color.red, bgcolor = color.new(color.black, 20))
+
+// =============================================================================
+// 4. ALERTS
+// =============================================================================
+alertcondition(buySignal, title = "NIFTY BUY Entry", message = "{\"signal\": \"BUY\", \"symbol\": \"NIFTY\", \"price\": {{close}}}")
+alertcondition(sellSignal, title = "NIFTY SELL Entry", message = "{\"signal\": \"SELL\", \"symbol\": \"NIFTY\", \"price\": {{close}}}")
+alertcondition(exitLong, title = "NIFTY Exit Long", message = "{\"signal\": \"EXIT_LONG\", \"symbol\": \"NIFTY\", \"price\": {{close}}}")
+alertcondition(exitShort, title = "NIFTY Exit Short", message = "{\"signal\": \"EXIT_SHORT\", \"symbol\": \"NIFTY\", \"price\": {{close}}}")

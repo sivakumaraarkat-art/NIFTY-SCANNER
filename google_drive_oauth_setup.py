@@ -29,7 +29,12 @@ def main():
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                print(f"Token refresh failed ({e}). Re-authenticating via browser...")
+                flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_path), SCOPES)
+                creds = flow.run_local_server(port=0)
         else:
             flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_path), SCOPES)
             creds = flow.run_local_server(port=0)
@@ -38,7 +43,14 @@ def main():
             token_handle.write(creds.to_json())
 
     print(f"Google Drive OAuth token saved to: {token_file}")
-    print("You can now run the audit script and uploads should work for the configured folder.")
+
+    # Auto-sync to Cloud VM
+    ssh_key = Path("D:/NiftyScanner/oracle/nifty-v15.key")
+    if ssh_key.exists():
+        print("[*] Syncing fresh token to Cloud VM...")
+        cmd = f'scp -i "{ssh_key}" "{token_file}" ubuntu@140.245.195.112:/home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/{token_file}'
+        os.system(cmd)
+        print("[+] Cloud VM token synchronized successfully!")
 
 
 if __name__ == "__main__":

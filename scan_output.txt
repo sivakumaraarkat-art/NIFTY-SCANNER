@@ -1,0 +1,12 @@
+
+📊 [DAILY TRADING DISCIPLINE STATUS]
+   • Total Trades Initiated Today: 0 / 10 Max Allowed
+   • Stop Losses Hit Today:       0 / 3 Max Before Circuit Breaker
+   • Quota Remaining for Today:   10 trade(s)
+   • Max New Trades This Scan:    2 trade(s)
+
+🔍 Resolving live market option strikes, quotes & Greeks...
+❌ SKIPPED: No verified NFO/BFO RELIANCE CE contract found in Zerodha instruments.
+❌ SKIPPED: No verified NFO/BFO TCS CE contract found in Zerodha instruments.
+
+⚠️ No qualified option candidates found matching the score criteria.

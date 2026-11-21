@@ -20,7 +20,7 @@ Strategy for BTST:
   • Target: +25% (T1), +50% (T2)
 
 Usage:
-    python src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 50
+    python src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 85
     python src/scanners/run_btst_options_scan_powerful_sl.py --include-nifty --symbols RELIANCE,TCS,BPCL
 """
 
@@ -98,6 +98,9 @@ NSE_HOLIDAYS_2026 = [
 def is_trading_day() -> bool:
     """Check if today is a valid NSE trading day."""
     today = now_ist()
+    # Special exemption for Diwali Muhurat Trading on Sunday, Nov 8, 2026
+    if today.date() == datetime(2026, 11, 8).date():
+        return True
     if today.weekday() >= 5:
         return False
     if today.date() in {holiday.date() for holiday in NSE_HOLIDAYS_2026}:
@@ -132,6 +135,10 @@ def get_latest_news_symbols(log_dir: Path) -> list:
     if not news_files:
         return []
     latest_file = max(news_files, key=lambda f: f.stat().st_mtime)
+    file_age_hours = (datetime.now() - datetime.fromtimestamp(latest_file.stat().st_mtime)).total_seconds() / 3600
+    if file_age_hours > 36.0:
+        print(f"⚠️  [INTEGRATION] News log {latest_file.name} is {file_age_hours:.1f}h old (expired > 36h). Ignoring stale news.")
+        return []
     try:
         with open(latest_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -143,14 +150,72 @@ def get_latest_news_symbols(log_dir: Path) -> list:
     if "data" in data and isinstance(data["data"], dict):
         for sym, d in data["data"].items():
             sent = d.get("sentiment", "")
-            if "BULLISH" in sent or "BEARISH" in sent:
-                raw_score = float(d.get("avg_score", d.get("score", 70)))
-                # Direction score: 75=Bullish, 25=Bearish. Convert to conviction score (60-95 scale)
-                if "BEARISH" in sent:
-                    conviction_score = int(min(95, max(60, 100.0 - raw_score)))
-                else:
-                    conviction_score = int(min(95, max(60, raw_score)))
-                symbols_with_sentiment.append((sym, sent, conviction_score))
+            if not ("BULLISH" in sent or "BEARISH" in sent):
+                continue
+
+            # -------------------------------------------------------------
+            # ANTI-FAKE NEWS & DOUBLE-VERIFICATION SHIELD
+            # -------------------------------------------------------------
+            if d.get("is_conflicting", False):
+                print(f"⚠️  [SHIELD] Skipping {sym}: Conflicting news reports.")
+                continue
+
+            cred_badge = d.get("credibility_badge", "LOW")
+            has_tier1 = d.get("has_tier1", False) or d.get("supporting_publisher_trusted", False)
+            unique_sources = d.get("unique_sources", 1)
+            sources_str = d.get("primary_sources", "Unknown")
+
+            # Must satisfy Double Verification:
+            # At least 1 verified Tier-1 financial media OR 2+ independent publishers
+            is_verified = has_tier1 or (unique_sources >= 2)
+            if not is_verified:
+                print(f"🛡️  [ANTI-FAKE NEWS] Rejected {sym}: Single unverified source ({sources_str}). Requires Tier-1 media or 2+ independent sources.")
+                continue
+
+            # -------------------------------------------------------------
+            # HIGH CONVICTION SCORING (65-98 scale)
+            # -------------------------------------------------------------
+            raw_score = float(d.get("avg_score", d.get("score", 70)))
+            conviction = 65  # Verified baseline
+            if has_tier1:
+                conviction += 12  # +12 for Tier-1 financial publisher
+            if unique_sources >= 2:
+                conviction += 8   # +8 for double source corroboration
+            if unique_sources >= 3:
+                conviction += 5   # +5 for multi-source consensus
+
+            category = d.get("catalyst_category", "")
+            high_impact_events = {
+                "Order / contract", "Earnings / results", "Joint venture",
+                "Debt / Solvency", "Governance / Resignation", "Legal / regulatory"
+            }
+            if category in high_impact_events:
+                conviction += 8   # +8 for verified high-impact business filing
+
+            if "BULLISH" in sent and raw_score >= 70:
+                conviction += 5
+            elif "BEARISH" in sent and raw_score <= 30:
+                conviction += 5
+
+            age_hours = float(d.get("directional_age_hours", d.get("news_age_hours", 12.0)))
+            if age_hours <= 6.0:
+                conviction += 3
+            elif age_hours > 24.0:
+                conviction -= 10
+
+            final_conviction = int(min(98, max(50, conviction)))
+
+            meta = {
+                "headline": d.get("top_headline", ""),
+                "catalyst_category": category,
+                "sources": sources_str,
+                "unique_sources": unique_sources,
+                "has_tier1": has_tier1,
+                "is_verified": is_verified,
+                "age_hours": age_hours,
+                "credibility": cred_badge,
+            }
+            symbols_with_sentiment.append((sym, sent, final_conviction, meta))
 
         symbols_with_sentiment.sort(key=lambda x: x[2], reverse=True)
     return symbols_with_sentiment
@@ -229,10 +294,21 @@ def print_btst_results(stock_candidates: list[dict], index_candidates: list[dict
         contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {opt_type}")
         spot_str = f"(Spot: ₹{c.get('spot_price', 0):,.2f})" if c.get('spot_price', 0) > 0 else ""
         print(f"\n{i}. {icon} 🎯 {contract_str} {spot_str} | Score: {c['score']}/100 [{c.get('sentiment_catalyst', 'BTST')}]")
+
+        # Verified Catalyst & Conviction Audit
+        meta = c.get('meta') or c.get('news_meta') or {}
+        if meta.get('headline'):
+            t1_str = "Tier-1 Verified Media" if meta.get("has_tier1") else "Multi-Source Corroborated"
+            dual_note = " • 🔥 DUAL CONFIRMED (News + Technical Mover)" if meta.get("dual_confirmed") else ""
+            print(f"   📰 Catalyst: \"{meta['headline']}\"")
+            print(f"   🛡️ Verification: PASS ({t1_str} • {meta.get('unique_sources', 1)} Source(s): {meta.get('sources', 'Unknown')}){dual_note}")
+
         print(f"   Entry: ₹{c['ltp']:.2f} | Powerful SL: ₹{c['powerful_sl']:.2f} (-{c['sl_risk_pct']:.1f}%)")
         print(f"   Targets: T1: ₹{c['t1']:.2f} (+25%) | T2: ₹{c['t2']:.2f} (+50%)")
         print(f"   Sizing: {c.get('recommended_qty', 1)} lots ({c.get('lot_size', 1)}/lot) | Capital: ₹{c.get('capital_needed', 0):,.2f} | Max Risk: ₹{c.get('max_risk', 0):,.2f}")
-        print(f"   Greeks: Delta: {c['delta']:.2f} | Theta: {c['theta']:.2f}/day | IV: {c['iv']:.1f}%")
+        spread = c.get('spread_pct', 0)
+        liq_verdict = "EXCELLENT (<2.5%)" if spread <= 2.5 else ("GOOD (<5%)" if spread <= 5.0 else "FAIR")
+        print(f"   Greeks: Delta: {c['delta']:+.2f} | Theta: {c['theta']:.2f}/day | IV: {c['iv']:.1f}% | Spread: {spread:.1f}% [{liq_verdict}]")
         all_results.append(c)
 
     # Section 2: Index Options
@@ -298,8 +374,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-score",
         type=int,
-        default=50,
-        help="Minimum combined score to qualify (0-100)",
+        default=85,
+        help="Minimum combined score to qualify (0-100, default: 85 for high conviction)",
     )
     parser.add_argument(
         "--account-size",
@@ -357,6 +433,22 @@ def main():
         # Merge news and movers (avoid duplicates by symbol)
         seen_syms = set()
         combined = []
+        news_map = {item[0]: item for item in news_data}
+        movers_map = {item[0]: item for item in movers_data}
+
+        # Check for Dual Confirmation first (Stocks with BOTH verified news AND market momentum)
+        for sym in (set(news_map.keys()) & set(movers_map.keys())):
+            n_item = news_map[sym]
+            m_item = movers_map[sym]
+            n_dir = "BULLISH" if "BULLISH" in n_item[1] else "BEARISH"
+            m_dir = "BULLISH" if "BULLISH" in m_item[1] else "BEARISH"
+            if n_dir == m_dir:
+                boosted_score = min(98, max(n_item[2], m_item[2]) + 5)
+                n_meta = n_item[3] if len(n_item) > 3 else {}
+                n_meta["dual_confirmed"] = True
+                combined.append((sym, f"{n_dir} 🚀 [DUAL CONFIRMED: News + Technical]", boosted_score, n_meta))
+                seen_syms.add(sym)
+
         for item in (news_data + movers_data):
             sym = item[0]
             if sym not in seen_syms:

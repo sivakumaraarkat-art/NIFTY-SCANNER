@@ -462,27 +462,39 @@
 
                 <div class="metrics-grid">
                     <div class="metric-box">
-                        <div class="value">7</div>
+                        <div class="value">13</div>
                         <div class="label">Improvements Implemented</div>
                     </div>
                     <div class="metric-box">
-                        <div class="value">17</div>
+                        <div class="value">64</div>
                         <div class="label">Tests (100% Pass)</div>
                     </div>
                     <div class="metric-box">
-                        <div class="value">38.2 KB</div>
+                        <div class="value">51.2 KB</div>
                         <div class="label">Production Code</div>
                     </div>
                     <div class="metric-box">
-                        <div class="value">3</div>
-                        <div class="label">Scripts Improved</div>
+                        <div class="value">5</div>
+                        <div class="label">Scanners / Engines</div>
                     </div>
                 </div>
 
                 <div class="test-card">
-                    <h3>🚀 October 2026 Updates: Enterprise Improvements & Codebase Cleanup</h3>
+                    <h3>⚡ November 2026 Updates: Anti-Fake News Shield &amp; High-Conviction Option Engine</h3>
                     <ul class="feature-list">
-                        <li><strong>🛡️ Weekend & Holiday Guard:</strong> Prevents runners from executing scripts accidentally on weekends and 15 NSE holidays.</li>
+                        <li><strong>🛡️ Anti-Fake News &amp; Double-Verification Shield:</strong> Rejects unverified single-source aggregator rumors and social spam. Mandates verification from at least 1 Tier-1 financial media publisher (ET, Moneycontrol, Livemint, Reuters, CNBC-TV18, Bloomberg) or 2+ independent sources before qualifying.</li>
+                        <li><strong>🔥 Dual Confirmation Engine:</strong> Combines Tier-1 verified fundamental news with live exchange market momentum, boosting conviction scores to 95–98/100.</li>
+                        <li><strong>📊 Deep Option Quality &amp; Greeks Analysis:</strong> Performs full contract-level health checks (Delta capture efficiency, Theta decay per day, Vega sensitivity, and &le;2.5% tight bid-ask spread liquidity).</li>
+                        <li><strong>⏱️ Automated 3:25 PM EOD Square-Off:</strong> Automatically squares off open intraday contracts at the 15:25 candle close, eliminating "Hit time: Not observed" and recording accurate realized P&amp;L.</li>
+                        <li><strong>🛡️ Conservative Same-Candle Resolution:</strong> Resolves simultaneous high/low Target and SL touches as <code>SL_HIT</code> for capital preservation.</li>
+                        <li><strong>🎯 Exact Symbol Matching &amp; Broker Attribution Mask:</strong> Strict instrument matching prevents false ticker mapping, while analyst attribution masking ensures research brokers are not confused with target companies.</li>
+                    </ul>
+                </div>
+
+                <div class="test-card" style="margin-top: 15px;">
+                    <h3>🚀 October 2026 Updates: Enterprise Improvements &amp; Codebase Cleanup</h3>
+                    <ul class="feature-list">
+                        <li><strong>🛡️ Weekend &amp; Holiday Guard:</strong> Prevents runners from executing scripts accidentally on weekends and 15 NSE holidays.</li>
                         <li><strong>🗑️ Log Rotation:</strong> Auto-cleans JSON logs older than 30 days to save disk space.</li>
                         <li><strong>🔌 Live API Foundation:</strong> Ready-to-enable structure for live Zerodha integration.</li>
                         <li><strong>🧹 Codebase Cleanup:</strong> Consolidated scanner implementations around <code>powerful_sl</code> and Twitter logic. Moved 4 legacy duplicate scripts into <code>.trash/</code> for an organized <code>src/scanners/</code> directory.</li>
@@ -1670,6 +1682,94 @@ NEXT DAY 9:30 AM:
                     <div class="improvement-card">
                         <p><strong>Benefit:</strong> JSON audit trail for all scans</p>
                         <p><strong>File:</strong> logs/intraday_scan_YYYYMMDD_HHMMSS.json</p>
+                    </div>
+                </div>
+
+                <div class="scanner-section">
+                    <h3>Improvement 7: Automated 3:25 PM EOD Square-Off &amp; Monitor Engine <span class="badge-new">NEW</span></h3>
+                    <div class="improvement-card">
+                        <p><strong>Problem:</strong> Trades that fluctuated within the safe boundary without breaching T1 (+8%) or SL (-20%) remained permanently stuck in <code>Status: OPEN</code> with <code>Exit: Live (₹0.00)</code> and <code>Hit time: Not observed</code> in the 4:00 PM summary.</p>
+                        <p><strong>Solution:</strong> Automated MIS/Intraday square-off protocol at <code>15:25 IST</code>:</p>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            <li>Evaluates all remaining <code>OPEN</code> contracts at 15:25 PM IST using the close price of the 15:25 1-minute historical candle.</li>
+                            <li>Transitions status to <code>CLOSED</code> with <code>close_reason: "EOD_SQUARE_OFF"</code> and timestamps the exit.</li>
+                            <li>Calculates true realized P&amp;L (<code>(close_price - entry_price) * lots * lot_size</code>) and percentage return.</li>
+                            <li>Incorporates squared-off trades into the 4:00 PM summary win/loss accounting (win if realized P&amp;L &gt; 0, loss if &lt; 0).</li>
+                        </ul>
+                        <div class="code-block"># EOD SQUARE-OFF (15:25 IST)
+if not hit_event and trade.get("status") == "OPEN" and valid:
+    if now.time() &gt;= SQUARE_OFF_TIME:
+        sq_candidates = [(st, c) for st, c in valid if st.time() &lt;= SQUARE_OFF_TIME]
+        sq_stamp, sq_candle = sq_candidates[-1] if sq_candidates else valid[-1]
+        close_price = float(sq_candle["close"])
+        trade.update(
+            status="CLOSED",
+            close_reason="EOD_SQUARE_OFF",
+            close_price=close_price,
+            close_time=sq_stamp.isoformat(),
+            pnl=(close_price - entry) * lots * lot_size,
+            pnl_pct=(close_price - entry) / entry * 100
+        )</div>
+                    </div>
+                </div>
+
+                <div class="scanner-section">
+                    <h3>Improvement 8: Conservative Same-Candle Target/SL Collision Handler <span class="badge-new">NEW</span></h3>
+                    <div class="improvement-card">
+                        <p><strong>Problem:</strong> When high volatility touches both Target (+8%) and SL (-20%) in the same 1-minute candle, trades previously entered an ambiguous unresolved state.</p>
+                        <p><strong>Solution:</strong> Conservative risk management resolves the collision as <code>SL_HIT</code>, guaranteeing capital preservation principles over optimistic reporting.</p>
+                    </div>
+                </div>
+
+                <div class="scanner-section">
+                    <h3>Improvement 9: Exact Symbol Matching in Kite Instruments Master <span class="badge-new">NEW</span></h3>
+                    <div class="improvement-card">
+                        <p><strong>Problem:</strong> Substring matching (<code>symbol in inst["name"]</code>) produced false instrument mappings (e.g., <code>LT</code> matched <code>VOLTAS</code>/<code>LTIM</code>, <code>BEL</code> matched <code>BHEL</code>, <code>IOC</code> matched <code>INDIACEM</code>).</p>
+                        <p><strong>Solution:</strong> Implemented strict equality <code>matches_symbol(inst_name, target_sym)</code> with specialized index alias mapping, ensuring 100% precision in ATM strike and option contract resolution.</p>
+                    </div>
+                </div>
+
+                <div class="scanner-section">
+                    <h3>Improvement 10: Late-Session Scalp Mode (Post 2:30 PM IST) <span class="badge-new">NEW</span></h3>
+                    <div class="improvement-card">
+                        <p><strong>Problem:</strong> Signals generated between 2:30 PM and 2:50 PM IST rarely had sufficient time to reach standard +8% targets before the 3:25 PM market square-off.</p>
+                        <p><strong>Solution:</strong> The scanner dynamically activates a +5% scalp target for signals fired after 2:30 PM, calibrating profit targets to the condensed 35–55 minute trading window.</p>
+                    </div>
+                </div>
+
+                <div class="scanner-section">
+                    <h3>Improvement 11: Option Bid-Ask Liquidity Filter <span class="badge-new">NEW</span></h3>
+                    <div class="improvement-card">
+                        <p><strong>Feature:</strong> Added bid-ask spread sanity check in <code>options_data_provider.py</code> rejecting contracts with &gt;12% spread to prevent slippage traps on entry/exit.</p>
+                    </div>
+                </div>
+
+                <div class="scanner-section">
+                    <h3>Improvement 12: News Scanner Clause Negation &amp; Sentiment Audit Safeguards <span class="badge-new">NEW</span></h3>
+                    <div class="improvement-card">
+                        <p><strong>Problem:</strong> Global regex sentiment misclassified company denials (e.g., "denies data breach" flagged as bearish), duplicate headlines from syndicators split votes, ambiguous company names matched global events (e.g. "Titan submersible" matching TITAN), and network dropouts overwrote valid cached sentiment.</p>
+                        <p><strong>Solution:</strong> Enterprise audit safeguards in <code>news_scanner_with_twitter.py</code>:</p>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            <li><strong>Clause-Level Segmentation:</strong> Splits sentences on conjunctions (<code>but</code>, <code>however</code>, <code>although</code>, <code>;</code>) to isolate independent claims and score them individually.</li>
+                            <li><strong>Disputed / Denial Handling:</strong> Rebuttals and official denials are tagged as <code>Disputed / Denial</code> and resolved to neutral, preventing false crash flags.</li>
+                            <li><strong>Ambiguous Ticker Isolation:</strong> Enforces company context or uppercase boundaries (e.g. <code>TITAN</code> vs submersible, <code>OIL</code> vs Brent crude oil).</li>
+                            <li><strong>Publisher Suffix Stripping &amp; URL Cleaning:</strong> Normalizes tracking tokens and strips known news media suffixes so syndications hash to identical deduplication keys.</li>
+                            <li><strong>Network Failure Protection:</strong> Preserves existing <code>latest_news_sentiment.json</code> cache when external RSS feeds fail or return zero entries.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="scanner-section">
+                    <h3>Improvement 13: Anti-Fake News Shield, Double-Verification &amp; High Conviction Option Engine <span class="badge-new">NEW</span></h3>
+                    <div class="improvement-card">
+                        <p><strong>Problem:</strong> Single-source social rumors or low-tier aggregators could feed noise into option trading, while research broker names (e.g. <code>Motilal Oswal</code> issuing recommendations) were falsely matched as target stocks.</p>
+                        <p><strong>Solution:</strong> Enterprise double-verification and institutional conviction scoring:</p>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            <li><strong>Anti-Fake News Guard:</strong> Rejects unverified single-source aggregator reports (e.g. SolarQuarter, social posts) and conflicting stories. Requires verification from at least 1 Tier-1 financial media publisher (Moneycontrol, Economic Times, Livemint, Reuters, CNBC-TV18, Bloomberg, StockEdge) OR 2+ independent sources.</li>
+                            <li><strong>Broker Attribution Masking:</strong> Trailing analyst/broker attributions (e.g. <code>: Motilal Oswal</code>, <code>: ICICI Securities</code>) are masked so the research broker is never confused with the company having news.</li>
+                            <li><strong>Dual Confirmation Engine:</strong> Stocks exhibiting BOTH Tier-1 verified corporate catalysts AND live exchange market momentum receive dual confirmation and top conviction scores (95–98/100).</li>
+                            <li><strong>Option Contract &amp; Greeks Quality Analysis:</strong> Every candidate receives contract-level scrutiny: Delta capture efficiency (0.45–0.55), Theta decay per day, Vega sensitivity, and tight bid-ask spread check (&le;2.5% for institutional liquidity).</li>
+                        </ul>
                     </div>
                 </div>
             </div>

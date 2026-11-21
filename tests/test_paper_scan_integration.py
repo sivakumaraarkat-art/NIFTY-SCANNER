@@ -7,7 +7,13 @@ import run_swing_trade_system
 
 def test_controlled_paper_scan_preserves_cap_segments_and_signal_only(
     monkeypatch,
+    tmp_path,
 ):
+    test_active = tmp_path / "active_swing_trades.json"
+    test_closed = tmp_path / "closed_swing_trades.json"
+    monkeypatch.setattr("trade_selection.active_swing_trade_registry.ACTIVE_TRADES_FILE", test_active)
+    monkeypatch.setattr("trade_selection.active_swing_trade_registry.CLOSED_TRADES_FILE", test_closed)
+    monkeypatch.setattr("trade_selection.active_swing_trade_registry.DB_DIR", tmp_path)
     settings = SimpleNamespace(
         controlled_universe_size=3,
         max_historical_download_symbols=3,

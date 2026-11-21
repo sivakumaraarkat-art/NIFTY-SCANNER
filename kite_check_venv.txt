@@ -1,0 +1,1 @@
+<module 'kiteconnect.__version__' from '/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages/kiteconnect/__version__.py'>

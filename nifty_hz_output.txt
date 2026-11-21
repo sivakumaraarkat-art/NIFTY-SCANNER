@@ -1,0 +1,9 @@
+==================================================================================
+🔥 STAGE 10 V14.7 — NIFTY HERO-ZERO EXPIRY SCANNER (TUESDAY EXPIRY)
+🤖 TELEGRAM BOT: @Nifty_stage10_paper_bot
+==================================================================================
+
+=== [DRY RUN PREVIEW - NIFTY HERO ZERO] ===
+#1 NIFTY 22800 CE | Sym: NIFTY26112122800CE | Entry: 18.0 | SL: 9.0 | T1: 36.0 | T2: 72.0 | Catalyst: BULLISH BREAKOUT 🚀
+
+✅ Scan execution logged to: logs/nifty_hero_zero_20261121_144356.json

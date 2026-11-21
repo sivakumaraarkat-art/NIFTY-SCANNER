@@ -1,0 +1,4 @@
+IRCTC           25.0  BEARISH    LOW (Unverified publisher / social / aggregator)
+  Five Formerly Popular Indian Stocks Down 50% to 70% Over Five Years - November 21, 2026 🔹 Five well-known Indian stocks—Bata India, Clean Science and Technology, Whirlpool of India, Indian Energy Exchange, and IRCTC—have shed between 50% a - X | 21-Nov-2026 11:09 AM IST
+Found 8 stocks. Feeds successful: 23/23. JSON: logs/news_scan_twitter_20261121_144334_602213.json
+Excel: logs/latest_news_sentiment.xlsx

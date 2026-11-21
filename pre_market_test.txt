@@ -1,0 +1,50 @@
+
+====================================================================================================
+             🛡️  PORTFOLIO PEAK EXHAUSTION, INSTITUTIONAL FLOW & DYNAMIC RE-ENTRY GUARD             
+====================================================================================================
+📅 Timestamp: 21-Nov-2026 03:11 PM IST
+✅ Connected to Zerodha Kite Connect successfully.
+
+SYMBOL       | LTP (₹)   | 20-EMA    | RSI   | FII+DII  | RVOL   | MOVE PREDICTION            | DECISION STATUS
+-----------------------------------------------------------------------------------------------------------------------------
+AKSHAR       | ₹0.45     | ₹0.43     | 80.0  | 0.2%     | 1.1x   | STABLE                     | 🟡 50% SELL (PROFIT & DIP BUYBACK)
+ALOKINDS     | ₹7.93     | ₹8.15     | 40.9  | 2.2%     | 0.8x   | STABLE                     | 🔴 100% SELL (PEAK EXHAUSTION)
+ASHOKLEY     | ₹163.50   | ₹162.21   | 62.9  | 38.2%    | 0.6x   | STABLE                     | 🟢 SAFE HOLD (BULLISH MOMENTUM)
+BAJAJHFL     | ₹81.95    | ₹81.37    | 61.1  | 8.5%     | 0.9x   | STABLE                     | 🟢 SAFE HOLD (BULLISH MOMENTUM)
+COALINDIA    | ₹390.00   | ₹396.08   | 40.9  | 32.5%    | 1.0x   | STABLE                     | 🔴 100% SELL (PEAK EXHAUSTION)
+COCHINSHIP   | ₹1125.00  | ₹1184.02  | 43.5  | 22.8%    | 1.0x   | STABLE                     | 🔵 AVERAGE (BOTTOM VALUE FLOOR)
+DREAMFOLKS   | ₹59.57    | ₹59.91    | 53.9  | 11.2%    | 0.6x   | STABLE                     | 🔴 100% SELL (PEAK EXHAUSTION)
+ECOSMOBLTY   | ₹116.51   | ₹115.95   | 65.1  | 14.5%    | 0.7x   | STABLE                     | 🟢 SAFE HOLD (BULLISH MOMENTUM)
+ELECTCAST    | ₹65.22    | ₹68.53    | 45.8  | 19.4%    | 0.9x   | STABLE                     | 🔵 AVERAGE (BOTTOM VALUE FLOOR)
+EPACK        | ₹165.64   | ₹159.65   | 61.4  | 9.8%     | 2.1x   | 🚀 COILING BREAKOUT         | 🟢 SAFE HOLD (BULLISH MOMENTUM)
+GTLINFRA     | ₹1.02     | ₹1.05     | 44.8  | 0.8%     | 1.1x   | STABLE                     | ⚪ CONSOLIDATION / WATCH
+HAPPSTMNDS   | ₹296.60   | ₹309.11   | 39.9  | 12.8%    | 1.4x   | 🚀 COILING BREAKOUT         | 🔵 AVERAGE (BOTTOM VALUE FLOOR)
+IEX          | ₹113.15   | ₹111.76   | 64.8  | 36.4%    | 1.0x   | STABLE                     | 🟢 SAFE HOLD (BULLISH MOMENTUM)
+IMAGICAA     | ₹39.72    | ₹42.17    | 36.1  | 5.8%     | 0.4x   | STABLE                     | 🔵 AVERAGE (BOTTOM VALUE FLOOR)
+IOC          | ₹150.50   | ₹142.22   | 76.2  | 21.3%    | 1.1x   | STABLE                     | 🟡 50% SELL (PROFIT & DIP BUYBACK)
+IRB          | ₹18.05    | ₹17.64    | 67.4  | 48.5%    | 1.4x   | STABLE                     | 🟢 SAFE HOLD (BULLISH MOMENTUM)
+LODHA        | ₹1218.70  | ₹1156.24  | 81.2  | 43.6%    | 0.7x   | STABLE                     | 🟡 50% SELL (PROFIT & DIP BUYBACK)
+MADHAVIPL    | ₹6.70     | ₹6.88     | 44.5  | 0.5%     | 0.6x   | STABLE                     | 🔵 AVERAGE (BOTTOM VALUE FLOOR)
+NITYAS       | ₹61.82    | ₹66.69    | 32.0  | 15.0%    | 0.6x   | STABLE                     | 🔵 AVERAGE (BOTTOM VALUE FLOOR)
+NTPCGREEN    | ₹83.27    | ₹83.76    | 49.3  | 15.2%    | 1.0x   | STABLE                     | 🔴 100% SELL (PEAK EXHAUSTION)
+PCBL         | ₹271.20   | ₹282.07   | 37.6  | 18.2%    | 0.7x   | STABLE                     | 🔵 AVERAGE (BOTTOM VALUE FLOOR)
+SALASAR      | ₹5.34     | ₹4.79     | 69.1  | 1.4%     | 0.7x   | STABLE                     | 🟢 SAFE HOLD (BULLISH MOMENTUM)
+SUZLON       | ₹36.96    | ₹37.79    | 61.5  | 30.1%    | 0.6x   | STABLE                     | ⚪ CONSOLIDATION / WATCH
+
+====================================================================================================
+                         📋 ACTIONABLE PORTFOLIO & INSTITUTIONAL DIRECTIVES                          
+====================================================================================================
+
+📌 AKSHAR (1001 shares @ ₹3.85) — 🟡 50% SELL (PROFIT & DIP BUYBACK)
+   • 💰 <b>OVERBOUGHT PEAK:</b> RSI at 80.0 (Exhaustion Zone). Smart money sells on positive news! <b>SELL 50% OF HOLDING NOW</b> to lock peak profits! 🎯 <b>Buyback Target on Dip:</b> Re-accumulate shares when price dips 10%–20% to <b>₹0.36 – ₹0.40</b> to get 15-20% more shares free!
+   • 🏛️ Institutional Flow: FII+DII 0.2% (D-Tier) | RVOL 1.14x ➔ Moderate/Low institutional base (0.2%). Retail-dominated swing action.
+   • 🔮 Predictive Blueprint: If Falls on Panic ➔ Buy @ ₹0.39 – ₹0.41 | If Spikes on Beat ➔ Sell 50% @ ₹0.50
+   • 🔄 Dip Buyback Plan: Re-buy on dip @ ₹0.36 – ₹0.40
+   • 📰 Latest News: "No major corporate filings in past 72 hours." (⚪ NEUTRAL)
+
+📌 ALOKINDS (501 shares @ ₹28.27) — 🔴 100% SELL (PEAK EXHAUSTION)
+   • 🚨 <b>CRITICAL SELL SIGNAL (Quarterly Results Missed / Downside Breakdown):</b> Trend broken at peak! Closed below 20-EMA (₹8.15) and Peak SL (₹10.95). <b>SELL 100% OF HOLDINGS NOW</b> to protect capital and prevent a 30%–60% cyclical crash!
+   • 🏛️ Institutional Flow: FII+DII 2.2% (C-Tier) | RVOL 0.83x ➔ Moderate/Low institutional base (2.2%). Retail-dominated swing action.
+   • 🔮 Predictive Blueprint: If Falls on Panic ➔ Buy @ ₹6.82 – ₹7.30 | If Spikes on Beat ➔ Sell 50% @ ₹8.88
+   • 📰 Latest News: "Alok Industries Q2FY27 Results: Net loss widens to ₹208 crore YoY" (🔴 NEGATIVE SENTIMENT)
+

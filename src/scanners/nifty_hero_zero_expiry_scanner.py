@@ -145,11 +145,59 @@ def get_default_time_slot_label() -> str:
         return f"{now.strftime('%I:%M %p')} Gamma Expiry Window"
 
 
+def load_nse_holidays() -> set[date]:
+    """Load official NSE trading holidays from trader-in/holidays.json."""
+    holidays = set()
+    h_path = ROOT / "trader-in" / "holidays.json"
+    if h_path.exists():
+        try:
+            data = json.loads(h_path.read_text(encoding="utf-8"))
+            for item in data.get("CM", []):
+                td = item.get("tradingDate")
+                if td:
+                    holidays.add(datetime.strptime(td, "%d-%b-%Y").date())
+        except Exception:
+            pass
+    # Built-in fallback
+    if not holidays:
+        holidays = {
+            date(2026, 1, 26), date(2026, 3, 3), date(2026, 3, 31),
+            date(2026, 4, 14), date(2026, 5, 1), date(2026, 10, 20),
+            date(2026, 11, 10), date(2026, 11, 24), date(2026, 12, 25)
+        }
+    return holidays
+
+
 def is_nifty_expiry_day(check_dt: Optional[datetime] = None, target_weekday: int = 1) -> bool:
-    """Check if today is NIFTY Expiry Day (Default: Tuesday = 1)."""
+    """
+    Check if today is NIFTY Expiry Day.
+    • Standard rule: Tuesday (weekday == 1).
+    • Holiday Shift Rule: If Tuesday is an NSE Holiday, weekly expiry automatically shifts to Monday (weekday == 0)!
+    """
     if check_dt is None:
         check_dt = datetime.now()
-    return check_dt.weekday() == target_weekday
+    today_d = check_dt.date()
+    weekday = check_dt.weekday()
+
+    holidays = load_nse_holidays()
+
+    # 1. If today is an NSE holiday, market is closed
+    if today_d in holidays:
+        return False
+
+    # 2. Case A: Standard Tuesday Expiry
+    if weekday == 1:
+        return True
+
+    # 3. Case B: Tuesday Holiday -> Shift to Monday!
+    if weekday == 0:
+        tomorrow_d = today_d + timedelta(days=1)
+        if tomorrow_d in holidays:
+            print(f"🔔 NIFTY EXPIRY SHIFT DETECTED: Tomorrow ({tomorrow_d.strftime('%d-%b-%Y')}) is an NSE Holiday!")
+            print(f"   -> Weekly NIFTY Expiry has shifted to TODAY ({today_d.strftime('%A, %d-%b-%Y')})!")
+            return True
+
+    return False
 
 
 def resolve_nifty_hero_zero_candidates(kite: Optional[Any], account_size: float = 500000.0, single_best: bool = True) -> List[Dict[str, Any]]:
@@ -510,6 +558,105 @@ def send_nifty_hero_zero_telegram_alert(candidates: List[Dict[str, Any]], time_l
         time.sleep(0.3)
 
 
+def deploy_automated_nifty_gtt(kite: Any, candidate: Dict[str, Any]) -> Optional[int]:
+    """Automatically places an active GTT order on Zerodha Kite when a NIFTY Hero-Zero strike is selected."""
+    if not kite:
+        return None
+    tradingsymbol = candidate.get("option_symbol")
+    if not tradingsymbol:
+        return None
+
+    exchange = "NFO"
+    product = "MIS"
+    qty = int(candidate.get("total_shares", 75))
+    ltp = float(candidate.get("ltp", 15.0))
+
+    min_buffer = max(0.50, round(ltp * 0.05, 1))
+    trigger_price = round(ltp + min_buffer, 1)
+    limit_price = round(trigger_price + 0.50, 1)
+
+    print(f"🚀 Placing automated Zerodha GTT for {tradingsymbol} @ Trigger ₹{trigger_price:.1f} | Limit ₹{limit_price:.1f} (Qty: {qty})...")
+
+    try:
+        existing_gtts = kite.get_gtts()
+        for g in existing_gtts:
+            cond = g.get("condition", {})
+            if "NIFTY" in cond.get("tradingsymbol", "") and g.get("status") in ["active", "triggered"]:
+                kite.delete_gtt(g.get("id"))
+    except Exception as e:
+        print(f"Notice during GTT cleanup: {e}")
+
+    buy_orders = [
+        {
+            "transaction_type": kite.TRANSACTION_TYPE_BUY,
+            "quantity": qty,
+            "order_type": kite.ORDER_TYPE_LIMIT,
+            "product": product,
+            "price": limit_price
+        }
+    ]
+
+    try:
+        resp = kite.place_gtt(
+            trigger_type=kite.GTT_TYPE_SINGLE,
+            tradingsymbol=tradingsymbol,
+            exchange=exchange,
+            trigger_values=[trigger_price],
+            last_price=ltp,
+            orders=buy_orders
+        )
+        gtt_id = resp.get("trigger_id")
+        print(f"✅ AUTOMATED NIFTY GTT DEPLOYED SUCCESSFULLY! Trigger ID: #{gtt_id} for {tradingsymbol}")
+
+        rec_lots = candidate.get("recommended_qty", 1)
+        qty_label = f"{qty} shares ({rec_lots} Lots)"
+
+        gtt_msg = (
+            f"⚡ <b>AUTOMATED ZERODHA GTT DEPLOYED</b> ⚡\n"
+            f"{DIVIDER}\n"
+            f"🟢 <b>Status:</b>   {tg_code('ACTIVE ON ZERODHA')}\n"
+            f"🆔 <b>GTT ID:</b>   {tg_code(gtt_id)}\n"
+            f"🏛️ <b>Contract:</b> {tg_code(tradingsymbol)}\n"
+            f"🎯 <b>Trigger:</b>  {tg_code(tg_money(trigger_price))} (Breakout entry)\n"
+            f"💵 <b>Limit:</b>    {tg_code(tg_money(limit_price))}\n"
+            f"📦 <b>Quantity:</b> {tg_code(qty_label)}\n"
+            f"💰 <b>Max Risk:</b> {tg_code(tg_money(qty * limit_price))}\n"
+            f"{DIVIDER}\n"
+            f"<i>Order is live on Zerodha exchange servers; will trigger automatically!</i>"
+        )
+        _send_hero_zero_tg(gtt_msg)
+        return gtt_id
+    except Exception as e:
+        print(f"❌ Automated NIFTY GTT Deployment Failed: {e}")
+        _send_hero_zero_tg(f"⚠️ <b>Automated NIFTY GTT Failed:</b> {html_escape(str(e))}")
+        return None
+
+
+def should_deploy_gtt(args: argparse.Namespace) -> bool:
+    """
+    Automated Zerodha GTT runs ONLY at 14:30 (02:30 PM) and 15:05 (03:05 PM) IST.
+    All other scan timings (14:00, 15:00, 15:10, etc.) are strictly Telegram alerts only.
+    """
+    if args.no_gtt:
+        return False
+    if args.auto_gtt:
+        return True
+
+    now = datetime.now()
+    hour = now.hour
+    minute = now.minute
+
+    # Slot 1: 14:30 IST Window (14:25 - 14:35)
+    if hour == 14 and 25 <= minute <= 35:
+        return True
+
+    # Slot 2: 15:05 IST Window (15:03 - 15:08)
+    if hour == 15 and 3 <= minute <= 8:
+        return True
+
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Dedicated NIFTY Hero-Zero Expiry Scanner")
     parser.add_argument("--time-slot", nargs="*", default=None, help="Execution time label")
@@ -518,6 +665,8 @@ def main():
     parser.add_argument("--expiry-day", type=str, default="Tuesday", choices=["Tuesday", "Thursday"], help="NIFTY expiry day")
     parser.add_argument("--both", action="store_true", help="Send both CE and PE (strangle) instead of single best candidate")
     parser.add_argument("--dry-run", action="store_true", help="Print candidates locally without dispatching to Telegram")
+    parser.add_argument("--auto-gtt", action="store_true", help="Force GTT placement regardless of time window (default: 14:30 and 15:05 only)")
+    parser.add_argument("--no-gtt", action="store_true", help="Disable automatic Zerodha GTT placement")
     args = parser.parse_args()
 
     if args.time_slot:
@@ -551,6 +700,13 @@ def main():
     else:
         print(f"\nDispatches Top {len(candidates)} NIFTY Hero-Zero Setups to @Nifty_stage10_paper_bot...")
         send_nifty_hero_zero_telegram_alert(candidates, time_label=time_slot_label)
+
+        # AUTOMATED GTT DEPLOYMENT: Runs ONLY at 14:30 and 15:05 IST!
+        if should_deploy_gtt(args) and candidates:
+            primary_candidate = candidates[0]
+            deploy_automated_nifty_gtt(kite, primary_candidate)
+        else:
+            print("ℹ️ Automated GTT: SKIPPED for this time slot (GTT is restricted to 14:30 & 15:05 IST only). Telegram alert dispatched successfully!")
 
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
