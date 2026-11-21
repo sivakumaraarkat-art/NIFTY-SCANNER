@@ -1,0 +1,15 @@
+🛡️  [ANTI-FAKE NEWS] Rejected IRCTC: Single unverified source (x.com). Requires Tier-1 media or 2+ independent sources.
+
+⚠️  [NEWS INTEGRATION] No recent news symbols found. Falling back to default.
+
+🔍 Resolving live market option strikes, quotes & Greeks for BTST...
+⚠️ SKIPPED: NIFTY NIFTY26NOV25800CE contract volume too low (0 contracts < 200). Illiquid contract.
+❌ SKIPPED: No valid live quote for NFO:SENSEX26NOV83900CE. No signal sent.
+⚠️ SKIPPED: RELIANCE RELIANCE26NOV1380CE contract volume too low (0 contracts < 200). Illiquid contract.
+⚠️ SKIPPED: TCS TCS26NOV2380CE contract volume too low (0 contracts < 200). Illiquid contract.
+⚠️ SKIPPED: BPCL BPCL26NOV315CE premium too low (₹1.60 < ₹4.50). High noise/whipsaw risk.
+⚠️ SKIPPED: VEDL VEDL26NOV240CE premium too low (₹1.50 < ₹4.50). High noise/whipsaw risk.
+⚠️ SKIPPED: MARUTI MARUTI26NOV14000CE contract volume too low (0 contracts < 200). Illiquid contract.
+⚠️ SKIPPED: HDFCBANK HDFCBANK26NOV850CE premium too low (₹3.65 < ₹4.50). High noise/whipsaw risk.
+
+⚠️ No qualified BTST candidates found matching score and theta criteria.

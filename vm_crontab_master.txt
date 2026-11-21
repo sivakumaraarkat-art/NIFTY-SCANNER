@@ -64,7 +64,7 @@ CRON_TZ=Asia/Kolkata
 50 15 * * 1,2,4 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/hero_zero_350pm_summary.py --force >> /home/ubuntu/NiftyScanner/cron_logs/cron_hero_zero_summary.log 2>&1
 
 # 11. 03:00 PM (Mon-Fri): BTST Options Scan (Stocks & NIFTY + SENSEX, Min Score 85)
-00 15 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 85 >> /home/ubuntu/NiftyScanner/cron_logs/cron_btst.log 2>&1
+00 15 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 86 >> /home/ubuntu/NiftyScanner/cron_logs/cron_btst.log 2>&1
 
 # 12. 04:00 PM (Mon-Fri): Intraday Options Stock P&L Summary Report
 00 16 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/daily_4pm_intraday_summary.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_intraday_4pm_summary.log 2>&1
@@ -93,6 +93,13 @@ CRON_TZ=Asia/Kolkata
 # Runs every 2 min from 09:16 to 10:30 AM (Mon-Fri): Auto-detects GTT fill & attaches OCO Exit
 16-58/2 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel.log 2>&1
 00-30/2 10 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel.log 2>&1
+
+# ==============================================================================
+# 14d. WEEKEND BACKTEST ENGINE (SATURDAY 10:00 AM)
+# ==============================================================================
+# Replays Mon-Fri trading using historical 5-min data, validates thresholds,
+# simulates all quality shields, generates Telegram + Google Drive report
+00 10 * * 6 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/weekend_backtest_engine.py --days 5 >> /home/ubuntu/NiftyScanner/cron_logs/cron_weekend_backtest.log 2>&1
 
 
 

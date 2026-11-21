@@ -20,7 +20,7 @@ Strategy for BTST:
   • Target: +25% (T1), +50% (T2)
 
 Usage:
-    python src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 85
+    python src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 86
     python src/scanners/run_btst_options_scan_powerful_sl.py --include-nifty --symbols RELIANCE,TCS,BPCL
 """
 
@@ -222,7 +222,7 @@ def get_latest_news_symbols(log_dir: Path) -> list:
 
 
 def get_live_market_movers(kite, nfo_instruments, top_n=8) -> list:
-    """Scan live F&O universe for top gainers (CE) and top losers (PE)."""
+    """Scan live F&O universe for top gainers (CE) and top losers (PE) with quality shields."""
     if kite is None:
         return []
     try:
@@ -243,7 +243,25 @@ def get_live_market_movers(kite, nfo_instruments, top_n=8) -> list:
             prev_close = ohlc.get("close", 0.0)
             high = ohlc.get("high", 0.0)
             low = ohlc.get("low", 0.0)
-            if prev_close <= 0 or ltp < 40:
+            vol = q.get("volume", 0)
+            if prev_close <= 0 or ltp < 60:
+                continue
+
+            # Quality Shield: Minimum volume for reliable options
+            if vol < 100000:
+                continue
+
+            # Quality Shield: Bid-ask spread check (via depth)
+            depth = q.get("depth", {})
+            buy_orders = depth.get("buy", [])
+            sell_orders = depth.get("sell", [])
+            spread_pct = 0.0
+            if buy_orders and sell_orders and buy_orders[0].get("price", 0) > 0 and sell_orders[0].get("price", 0) > 0:
+                bid = buy_orders[0]["price"]
+                ask = sell_orders[0]["price"]
+                if ltp > 0:
+                    spread_pct = ((ask - bid) / ltp) * 100
+            if spread_pct > 7.0:
                 continue
 
             pct = ((ltp - prev_close) / prev_close) * 100
@@ -251,10 +269,13 @@ def get_live_market_movers(kite, nfo_instruments, top_n=8) -> list:
             range_pos = ((ltp - low) / day_range) * 100 if day_range > 0 else 50.0
             name = sym.replace("NSE:", "")
 
-            if pct >= 0.8 and range_pos >= 70:
-                bullish.append((name, "BULLISH 🚀 (BTST Gainer)", int(min(95, 70 + pct * 5))))
-            elif pct <= -0.8 and range_pos <= 30:
-                bearish.append((name, "BEARISH ⚠️ (BTST Breakdown)", int(min(95, 70 + abs(pct) * 5))))
+            # Require stronger momentum for BTST (overnight risk)
+            if pct >= 1.2 and range_pos >= 75:
+                conviction = int(min(95, 70 + pct * 5 + (5 if vol >= 500000 else 0)))
+                bullish.append((name, "BULLISH 🚀 (BTST Gainer)", conviction))
+            elif pct <= -1.2 and range_pos <= 25:
+                conviction = int(min(95, 70 + abs(pct) * 5 + (5 if vol >= 500000 else 0)))
+                bearish.append((name, "BEARISH ⚠️ (BTST Breakdown)", conviction))
 
         bullish.sort(key=lambda x: x[2], reverse=True)
         bearish.sort(key=lambda x: x[2], reverse=True)
@@ -374,8 +395,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-score",
         type=int,
-        default=85,
-        help="Minimum combined score to qualify (0-100, default: 85 for high conviction)",
+        default=86,
+        help="Minimum combined score to qualify (0-100, default: 86 for high conviction)",
     )
     parser.add_argument(
         "--account-size",

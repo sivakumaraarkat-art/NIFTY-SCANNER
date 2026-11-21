@@ -569,27 +569,35 @@ def resolve_option_candidate(
         )
         return None
 
-    # Quality Shield 2: Smart Option Premium Threshold based on Lot Size
+    # Quality Shield 2: Smart Option Premium Threshold based on Lot Size & Strategy
     # For High-Lot Size stocks (1500, 2500, 3000, 4000 shares like SAIL, Tata Steel, RVNL, National Aluminium):
-    # Allow premium down to ₹1.80 if strong conviction (Score >= 88) for "Less Loss, More Profit" high-R:R trades
-    # For standard lot sizes (< 1500 shares): minimum premium is ₹3.50
-    min_premium = 1.80 if lot_size >= 1500 and sentiment_score >= 88 else 3.50
+    # Intraday: Allow ₹1.80 if strong conviction (Score >= 88)
+    # BTST: Higher floor (₹3.00 if high-lot + high-score) due to overnight theta risk
+    # For standard lot sizes (< 1500 shares): minimum premium ₹3.50 (intraday), ₹4.50 (BTST)
+    if is_btst:
+        min_premium = 3.00 if (lot_size >= 1500 and sentiment_score >= 88) else 4.50
+    else:
+        min_premium = 1.80 if (lot_size >= 1500 and sentiment_score >= 88) else 3.50
+
     if not is_index and not is_crude and option_ltp < min_premium:
         print(
             f"⚠️ SKIPPED: {symbol} {tradingsymbol} premium too low (₹{option_ltp:.2f} < ₹{min_premium:.2f}). High noise/whipsaw risk."
         )
         return None
 
-    # Quality Shield 3: Tight Liquidity Spread Shield (Max 7.0% spread, down from 12%)
-    if spread_pct > 7.0:
+    # Quality Shield 3: Tight Liquidity Spread Shield
+    # Intraday: Max 7.0% | BTST: Max 5.0% (overnight slippage risk higher)
+    max_spread = 5.0 if is_btst else 7.0
+    if spread_pct > max_spread:
         print(
-            f"⚠️ SKIPPED: {symbol} {tradingsymbol} bid-ask spread too wide ({spread_pct:.1f}% > 7.0%). Slippage risk."
+            f"⚠️ SKIPPED: {symbol} {tradingsymbol} bid-ask spread too wide ({spread_pct:.1f}% > {max_spread:.1f}%). Slippage risk."
         )
         return None
 
     # Quality Shield 4: Active Contract Volume Shield (minimum 200 contracts traded today)
-    opt_vol = int(q_info.get("volume", 0)) if "q_info" in locals() and isinstance(q_info, dict) else 0
-    if not is_crude and opt_vol < 200 and not is_btst:
+    # Apply to BOTH Intraday and BTST — illiquid contracts are dangerous overnight too
+    opt_vol = int(q_info.get("volume", 0)) if isinstance(locals().get("q_info"), dict) else 0
+    if not is_crude and opt_vol < 200:
         print(
             f"⚠️ SKIPPED: {symbol} {tradingsymbol} contract volume too low ({opt_vol} contracts < 200). Illiquid contract."
         )
@@ -610,17 +618,18 @@ def resolve_option_candidate(
     sl_risk = sl_data["sl_risk"]
 
     if not is_btst:
-        # Calibrated Positive Risk-to-Reward Ratio:
-        # Target 1 >= 1.35R (T1 points strictly greater than SL risk points, min +12.5%)
-        # Target 2 >= 2.35R (T2 points more than double SL risk points, min +22.0%)
+        # Intraday: T1 >= 1.35R (min +12.5%), T2 >= 2.35R (min +22.0%)
         t1_gain = max(round(sl_risk * 1.35, 2), round(option_ltp * 0.125, 2))
         t2_gain = max(round(sl_risk * 2.35, 2), round(option_ltp * 0.22, 2))
         t1 = round(option_ltp + t1_gain, 2)
         t2 = round(option_ltp + t2_gain, 2)
     else:
-        # BTST Overnight: T1 +25% (1.66R), T2 +50% (3.33R)
-        t1 = round(option_ltp * 1.25, 2)
-        t2 = round(option_ltp * 1.50, 2)
+        # BTST Overnight: Calibrated R:R (not fixed %)
+        # T1 >= 1.5R, T2 >= 2.5R with minimum % floors
+        t1_gain = max(round(sl_risk * 1.5, 2), round(option_ltp * 0.15, 2))
+        t2_gain = max(round(sl_risk * 2.5, 2), round(option_ltp * 0.25, 2))
+        t1 = round(option_ltp + t1_gain, 2)
+        t2 = round(option_ltp + t2_gain, 2)
 
     if is_index:
         step_sz = 50.0 if symbol in ["NIFTY", "NIFTY 50"] else 100.0
@@ -642,6 +651,12 @@ def resolve_option_candidate(
     warning_flags = []
     if is_btst and not is_index and t_days <= 2:
         warning_flags.append(f"⚠️ DTE {t_days}d (Overnight Theta Risk)")
+    # Hard filter: BTST on weekly expiries with DTE <= 1 is suicide (theta crush overnight)
+    if is_btst and not is_index and t_days <= 1:
+        print(
+            f"❌ SKIPPED: {symbol} {tradingsymbol} DTE={t_days}d too short for BTST. Theta crush guaranteed."
+        )
+        return None
 
     # Quality & Conviction Calibration:
     # 1. Reward tight bid-ask spread (high institutional liquidity)
@@ -750,9 +765,27 @@ def resolve_all_candidates(
     results = []
 
     if is_btst and include_nifty:
+        # For BTST, check both BULLISH (CE) and BEARISH (PE) for NIFTY & SENSEX
+        # Use sentiment from news/movers if available, default to BULLISH
         for idx in ["NIFTY", "SENSEX"]:
+            # Check if we have sentiment data for this index in candidates_list
+            idx_sentiment = "BULLISH"  # default
+            idx_score = 85
+            for item in candidates_list:
+                if isinstance(item, tuple) and len(item) >= 2:
+                    sym = item[0].upper()
+                    if sym == idx:
+                        sent = item[1].upper()
+                        if "BEARISH" in sent:
+                            idx_sentiment = "BEARISH"
+                        elif "BULLISH" in sent:
+                            idx_sentiment = "BULLISH"
+                        if len(item) >= 3:
+                            idx_score = int(item[2])
+                        break
+
             res = resolve_option_candidate(
-                kite, nfo_instruments, idx, "BULLISH", is_btst=True, account_size=account_size, sentiment_score=85
+                kite, nfo_instruments, idx, idx_sentiment, is_btst=True, account_size=account_size, sentiment_score=idx_score
             )
             if res and res["score"] >= min_score:
                 results.append(res)

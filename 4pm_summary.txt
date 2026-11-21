@@ -1,0 +1,80 @@
+├─ 🕒 <b>Hit time:</b> <code>10:29 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>-₹4,544.00</b> (<b>-10.0%</b>)
+
+🔴 <b>#5 INFY26NOV1074PE</b>
+├─ 📈 <b>Entry:</b> <code>₹13.60</code> → <b>Exit:</b> <code>SL (₹12.24)</code>
+├─ 🎯 <b>Status:</b> <b>SL HIT 🛑</b>
+├─ 🕒 <b>Hit time:</b> <code>10:53 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>-₹4,896.00</b> (<b>-10.0%</b>)
+
+🟢 <b>#6 AMBER26NOV6600CE</b>
+├─ 📈 <b>Entry:</b> <code>₹89.50</code> → <b>Exit:</b> <code>Target (₹101.58)</code>
+├─ 🎯 <b>Status:</b> <b>TARGET 1 HIT 🎯</b>
+├─ 🕒 <b>Hit time:</b> <code>10:52 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>+₹2,416.00</b> (<b>+13.5%</b>)
+──────────────────────
+💼 <b>TOTAL CAPITAL:</b> <code>₹253,520</code>
+💰 <b>NET P&L TODAY:</b>  <b>+₹5,261.75</b> (<b>+2.1%</b>)
+──────────────────────
+<i>Summary excludes duplicate scans of the same contract. Hit times have minute precision, not exact seconds. Legacy records require reconciliation. The partial signal minute is excluded. Exit uses the first threshold candle; same-candle T2 takes precedence over T1.</i>
+⚡ <b>DAILY INTRADAY OPTIONS SUMMARY (4:00 PM)</b>
+──────────────────────
+📅 <b>Date:</b>          <code>20-Nov-2026</code>
+🔄 <b>Scans Executed:</b> <code>4 (1-Hour Interval)</code>
+🔍 <b>Unique Signals:</b> <code>8 Setups (Cap: Max 10/Day)</code>
+🎯 <b>Win Rate:</b>      <b>50.0%</b> (4W / 4L)
+──────────────────────
+💰 <b>TRADE-BY-TRADE P&L BREAKDOWN</b>
+
+🔴 <b>#1 TITAN26NOV4550PE</b>
+├─ 📈 <b>Entry:</b> <code>₹53.05</code> → <b>Exit:</b> <code>SL (₹47.74)</code>
+├─ 🎯 <b>Status:</b> <b>SL HIT 🛑</b>
+├─ 🕒 <b>Hit time:</b> <code>09:51 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>-₹4,646.25</b> (<b>-10.0%</b>)
+
+🟢 <b>#2 APOLLOHOSP26NOV9100CE</b>
+├─ 📈 <b>Entry:</b> <code>₹86.00</code> → <b>Exit:</b> <code>Target (₹97.61)</code>
+├─ 🎯 <b>Status:</b> <b>TARGET 1 HIT 🎯</b>
+├─ 🕒 <b>Hit time:</b> <code>09:54 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>+₹5,805.00</b> (<b>+13.5%</b>)
+
+🟢 <b>#3 PERSISTENT26NOV6100CE</b>
+├─ 📈 <b>Entry:</b> <code>₹92.85</code> → <b>Exit:</b> <code>Target (₹105.39)</code>
+├─ 🎯 <b>Status:</b> <b>TARGET 1 HIT 🎯</b>
+├─ 🕒 <b>Hit time:</b> <code>10:21 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>+₹6,270.00</b> (<b>+13.5%</b>)
+
+🟢 <b>#4 MPHASIS26NOV2450CE</b>
+├─ 📈 <b>Entry:</b> <code>₹26.35</code> → <b>Exit:</b> <code>Target (₹29.91)</code>
+├─ 🎯 <b>Status:</b> <b>TARGET 1 HIT 🎯</b>
+├─ 🕒 <b>Hit time:</b> <code>10:27 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>+₹5,874.00</b> (<b>+13.5%</b>)
+
+🔴 <b>#5 PERSISTENT26NOV6200CE</b>
+├─ 📈 <b>Entry:</b> <code>₹69.50</code> → <b>Exit:</b> <code>SL (₹62.55)</code>
+├─ 🎯 <b>Status:</b> <b>SL HIT 🛑</b>
+├─ 🕒 <b>Hit time:</b> <code>10:51 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>-₹4,343.75</b> (<b>-10.0%</b>)
+
+🟢 <b>#6 KALYANKJIL26NOV620PE</b>
+├─ 📈 <b>Entry:</b> <code>₹9.95</code> → <b>Exit:</b> <code>Target (₹11.29)</code>
+├─ 🎯 <b>Status:</b> <b>TARGET 1 HIT 🎯</b>
+├─ 🕒 <b>Hit time:</b> <code>10:58 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>+₹1,809.00</b> (<b>+13.5%</b>)
+
+🔴 <b>#7 TATAELXSI26NOV3900CE</b>
+├─ 📈 <b>Entry:</b> <code>₹63.00</code> → <b>Exit:</b> <code>SL (₹56.70)</code>
+├─ 🎯 <b>Status:</b> <b>SL HIT 🛑</b>
+├─ 🕒 <b>Hit time:</b> <code>11:29 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>-₹4,725.00</b> (<b>-10.0%</b>)
+
+🔴 <b>#8 COFORGE26NOV2140CE</b>
+├─ 📈 <b>Entry:</b> <code>₹25.10</code> → <b>Exit:</b> <code>SL (₹22.59)</code>
+├─ 🎯 <b>Status:</b> <b>SL HIT 🛑</b>
+├─ 🕒 <b>Hit time:</b> <code>11:24 IST (1-minute candle)</code>
+└─ 💵 <b>P&L:</b>    <b>-₹4,769.00</b> (<b>-10.0%</b>)
+──────────────────────
+💼 <b>TOTAL CAPITAL:</b> <code>₹331,131</code>
+💰 <b>NET P&L TODAY:</b>  <b>+₹1,274.00</b> (<b>+0.4%</b>)
+──────────────────────
+<i>Summary excludes duplicate scans of the same contract. Hit times have minute precision, not exact seconds. Legacy records require reconciliation. The partial signal minute is excluded. Exit uses the first threshold candle; same-candle T2 takes precedence over T1.</i>

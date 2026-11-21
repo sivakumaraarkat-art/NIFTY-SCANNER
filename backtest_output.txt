@@ -1,0 +1,112 @@
+================================================================================
+HISTORICAL BACKTEST - OPTION RESOLUTION & SL/TARGET LOGIC
+================================================================================
+Connected to Kite
+Loaded 70907 instruments
+
+Fetching live spot data...
+
+--- RELIANCE (Spot: 1377.5) ---
+⚠️ SKIPPED: RELIANCE RELIANCE26NOV1380CE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: RELIANCE RELIANCE26NOV1380PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: RELIANCE RELIANCE26NOV1380CE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST CE: REJECTED
+⚠️ SKIPPED: RELIANCE RELIANCE26NOV1380PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+--- TCS (Spot: 2376.2) ---
+⚠️ SKIPPED: TCS TCS26NOV2380CE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: TCS TCS26NOV2380PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: TCS TCS26NOV2380CE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST CE: REJECTED
+⚠️ SKIPPED: TCS TCS26NOV2380PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+--- HDFCBANK (Spot: 846) ---
+❌ SKIPPED: No valid live quote for NFO:HDFCBANK26NOV850CE. No signal sent.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: HDFCBANK HDFCBANK26NOV850PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: HDFCBANK HDFCBANK26NOV850CE premium too low (₹3.65 < ₹4.50). High noise/whipsaw risk.
+  BTST CE: REJECTED
+⚠️ SKIPPED: HDFCBANK HDFCBANK26NOV850PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+--- ICICIBANK (Spot: 1640) ---
+⚠️ SKIPPED: ICICIBANK ICICIBANK26NOV1640CE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: ICICIBANK ICICIBANK26NOV1640PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: ICICIBANK ICICIBANK26NOV1640CE premium too low (₹4.25 < ₹4.50). High noise/whipsaw risk.
+  BTST CE: REJECTED
+⚠️ SKIPPED: ICICIBANK ICICIBANK26NOV1640PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+--- INFY (Spot: 1098) ---
+⚠️ SKIPPED: INFY INFY26NOV1100CE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: INFY INFY26NOV1100PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ Could not fetch spot price for INFY: Too many requests
+⚠️ SKIPPED: INFY INFY26NOV1360CE premium too low (₹0.10 < ₹4.50). High noise/whipsaw risk.
+  BTST CE: REJECTED
+⚠️ SKIPPED: INFY INFY26NOV1100PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+--- BAJFINANCE (Spot: 1122) ---
+⚠️ SKIPPED: BAJFINANCE BAJFINANCE26NOV1120CE premium too low (₹3.00 < ₹3.50). High noise/whipsaw risk.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: BAJFINANCE BAJFINANCE26NOV1120PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: BAJFINANCE BAJFINANCE26NOV1120CE premium too low (₹3.00 < ₹4.50). High noise/whipsaw risk.
+  BTST CE: REJECTED
+⚠️ SKIPPED: BAJFINANCE BAJFINANCE26NOV1120PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+--- MARUTI (Spot: 14011) ---
+⚠️ SKIPPED: MARUTI MARUTI26NOV14000CE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: MARUTI MARUTI26NOV14000PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: MARUTI MARUTI26NOV14000CE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST CE: REJECTED
+❌ SKIPPED: No valid live quote for NFO:MARUTI26NOV14000PE. No signal sent.
+  BTST PE: REJECTED
+
+--- SBIN (Spot: 1165.1) ---
+⚠️ SKIPPED: SBIN SBIN26NOV1170CE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: SBIN SBIN26NOV1170PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: SBIN SBIN26NOV1170CE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST CE: REJECTED
+⚠️ SKIPPED: SBIN SBIN26NOV1170PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+--- NIFTY (Spot: 25800.6) ---
+⚠️ SKIPPED: NIFTY NIFTY26NOV25800CE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: NIFTY NIFTY26NOV25800PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: NIFTY NIFTY26NOV25800CE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST CE: REJECTED
+⚠️ SKIPPED: NIFTY NIFTY26NOV25800PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+--- BANKNIFTY (Spot: 64635.2) ---
+❌ SKIPPED: No valid live quote for NFO:BANKNIFTY26NOV64600CE. No signal sent.
+  INTRADAY CE: REJECTED
+⚠️ SKIPPED: BANKNIFTY BANKNIFTY26NOV64600PE contract volume too low (0 contracts < 200). Illiquid contract.
+  INTRADAY PE: REJECTED
+⚠️ SKIPPED: BANKNIFTY BANKNIFTY26NOV64600CE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST CE: REJECTED
+⚠️ SKIPPED: BANKNIFTY BANKNIFTY26NOV64600PE contract volume too low (0 contracts < 200). Illiquid contract.
+  BTST PE: REJECTED
+
+================================================================================
+BACKTEST COMPLETE
+================================================================================

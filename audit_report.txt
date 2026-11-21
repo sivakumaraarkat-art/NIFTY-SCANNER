@@ -1,0 +1,103 @@
+=== WEEKLY TRADE AUDIT ANALYSIS (Nov 15-21, 2026) ===
+
+Total Trades: 104
+Columns: ['Trade Start Time', 'Trade End Time', 'Strategy', 'Symbol', 'Contract', 'Type', 'Strike', 'Signal Entry (₹)', 'Powerful SL (₹)', 'Target 1 (₹)', 'Target 2 (₹)', 'Lots', 'Lot Size', 'Capital Needed (₹)', 'Actual Exit (₹)', 'Actual P&L (₹)', 'Return (%)', 'Audit Status', 'Score']
+
+--- STRATEGY BREAKDOWN ---
+Strategy
+INTRADAY OPTIONS    83
+BTST OPTIONS        21
+
+--- AUDIT STATUS ---
+Audit Status
+TARGET 2 HIT 🔥        60
+SL HIT 🛑              33
+TARGET 1 HIT 🎯         8
+CLOSED IN PROFIT 📈     3
+
+--- P&L SUMMARY ---
+Total P&L: ₹3,595,150.50
+Wins: 71 | Losses: 33
+Win Rate: 68.3%
+Avg Win: ₹52,202.45
+Avg Loss: ₹-3,370.41
+
+--- CAPITAL & RETURN ---
+Total Capital: ₹3,451,092.50
+Total P&L: ₹3,595,150.50
+Return: 104.17%
+
+--- TOP 5 WINNERS ---
+  INDUSINDBK 930 CE: ₹278,222.00 (620.55%)
+  INDUSINDBK 930 CE: ₹199,255.00 (632.56%)
+  MARUTI 13200 CE: ₹168,483.00 (342.55%)
+  VEDL 255 PE: ₹161,828.00 (330.02%)
+  MAXHEALTH 990 CE: ₹151,137.00 (363.48%)
+
+--- TOP 5 LOSERS ---
+  ASHOKLEY 165 CE: ₹-5,000.00 (-10.04%)
+  CIPLA 1430 CE: ₹-4,998.00 (-10.03%)
+  NTPC 320 PE: ₹-4,995.00 (-9.87%)
+  INFY 1074 PE: ₹-4,896.00 (-10.0%)
+  HAL 4800 CE: ₹-4,866.00 (-9.99%)
+
+--- BY SYMBOL ---
+            Trades  Total_PnL    Win_Rate
+Symbol                                   
+INDUSINDBK       2  477477.00  100.000000
+EICHERMOT        3  360815.00  100.000000
+MARUTI           2  306327.00  100.000000
+TITAN            3  222309.50  100.000000
+KALYANKJIL       6  206685.00  100.000000
+BLUESTARCO       2  177918.00  100.000000
+NATIONALUM       2  166762.50  100.000000
+VEDL             1  161828.00  100.000000
+MAXHEALTH        1  151137.00  100.000000
+DLF              3  141217.50  100.000000
+MCX              3  118300.50  100.000000
+IREDA            3  111269.75  100.000000
+NIFTY            2   92862.25  100.000000
+SBIN             1   78000.00  100.000000
+INFY             2   76736.00   50.000000
+MUTHOOTFIN       1   76419.75  100.000000
+SAIL             2   64343.00  100.000000
+HINDZINC         1   63994.00  100.000000
+FORTIS           1   59830.00  100.000000
+KEI              2   55781.25  100.000000
+APOLLOHOSP       2   50820.00  100.000000
+TECHM            1   46980.00  100.000000
+MANAPPURAM       2   42600.00  100.000000
+PNB              1   41120.00  100.000000
+INOXWIND         2   41088.00  100.000000
+NAVINFLUOR       2   35274.00  100.000000
+COFORGE          1   34447.00  100.000000
+SYRMA            1   33228.00  100.000000
+PERSISTENT       2   32466.25  100.000000
+AMBER            5   31089.00   40.000000
+SAGILITY         2   30720.00  100.000000
+NTPC             2   20430.00   50.000000
+ASHOKLEY         4   18200.00   50.000000
+GRASIM           1   13200.00  100.000000
+POLICYBZR        1   11809.00  100.000000
+TATAELXSI        1   11100.00  100.000000
+PAYTM            3    2943.50   66.666667
+MPHASIS          2    1276.00   50.000000
+MOTILALOFS       2    -697.50   50.000000
+NAM-INDIA        1   -1562.50    0.000000
+ATHERENERG       1   -2073.75    0.000000
+KFINTECH         1   -2415.00    0.000000
+KAYNES           3   -3436.50   33.333333
+DELHIVERY        1   -3569.00    0.000000
+RVNL             2   -3580.50    0.000000
+LAURUSLABS       1   -3646.50    0.000000
+BHARTIARTL       1   -4066.00    0.000000
+CAMS             1   -4108.50    0.000000
+POWERINDIA       2   -4191.50    0.000000
+BIOCON           1   -4300.00    0.000000
+ANGELONE         2   -4475.00    0.000000
+BDL              1   -4641.00    0.000000
+HAL              1   -4866.00    0.000000
+CIPLA            1   -4998.00    0.000000
+MOTHERSON        2   -7749.00    0.000000
+CUMMINSIND       2   -9277.00    0.000000
+
