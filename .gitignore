@@ -6,6 +6,10 @@ database/market_data_cache/
 archive/
 logs/
 *.bak
+*.bak*
+*.key
+.kite_access_token
+.kite_api_key
 *.tmp
 news_reports/
 .credentials.json

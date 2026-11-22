@@ -42,6 +42,7 @@ STATE_FILE = ROOT / "database" / "gtt_sentinel_state.json"
 TARGET_PROFILES = {
     "CONCORDBIO": {"target": 603.00, "sl": 540.40},
     "GALLANTT":   {"target": 592.00, "sl": 516.90},
+    "VTL":        {"target": 581.20, "sl": 515.80},
 }
 
 

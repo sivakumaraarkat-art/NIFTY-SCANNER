@@ -200,7 +200,7 @@ def is_nifty_expiry_day(check_dt: Optional[datetime] = None, target_weekday: int
     return False
 
 
-def resolve_nifty_hero_zero_candidates(kite: Optional[Any], account_size: float = 500000.0, single_best: bool = True) -> List[Dict[str, Any]]:
+def resolve_nifty_hero_zero_candidates(kite: Optional[Any], account_size: float = 500000.0, single_best: bool = True, lots: Optional[int] = None) -> List[Dict[str, Any]]:
     """Scan and resolve live high-conviction NIFTY Hero-Zero option setups from Zerodha Kite."""
     spot_price = 22700.0
     day_open = 22700.0
@@ -220,16 +220,20 @@ def resolve_nifty_hero_zero_candidates(kite: Optional[Any], account_size: float 
     now_dt = datetime.now()
 
     # Dynamic target premium and window based on time of day:
-    # 2:00 PM - 2:59 PM: slightly higher premium window (₹12 - ₹55, target ~₹25)
-    # 3:00 PM - 3:30 PM: peak gamma surge window (₹10 - ₹42, target ~₹20)
+    # 2:00 PM - 2:59 PM: slightly higher premium window (₹12 - ₹55, target ~₹25, 2 Lots)
+    # 3:00 PM - 3:30 PM: peak gamma surge window (₹10 - ₹42, target ~₹20, 4 Lots)
     if now_dt.hour == 14:
         min_prem = 12.0
         max_prem = 55.0
         target_prem = 25.0
+        default_lots = 2
     else:
         min_prem = 10.0
         max_prem = 42.0
         target_prem = 20.0
+        default_lots = 4
+
+    selected_lots = lots if (lots is not None and lots > 0) else default_lots
 
     # Find today's or nearest upcoming expiry Nifty options
     nifty_options = []
@@ -333,7 +337,7 @@ def resolve_nifty_hero_zero_candidates(kite: Optional[Any], account_size: float 
             best_ce = qualified_ce[0]
             ltp = best_ce["ltp"]
             lot_sz = int(best_ce.get("lot_size", 65))
-            lots = 2
+            lots = selected_lots
             tot_qty = lots * lot_sz
             capital = round(ltp * tot_qty, 2)
 
@@ -380,7 +384,7 @@ def resolve_nifty_hero_zero_candidates(kite: Optional[Any], account_size: float 
             best_pe = qualified_pe[0]
             ltp = best_pe["ltp"]
             lot_sz = int(best_pe.get("lot_size", 65))
-            lots = 2
+            lots = selected_lots
             tot_qty = lots * lot_sz
             capital = round(ltp * tot_qty, 2)
 
@@ -433,7 +437,7 @@ def resolve_nifty_hero_zero_candidates(kite: Optional[Any], account_size: float 
         ]:
             ltp = 18.0 if o_type == "CE" else 16.0
             lot_sz = 65
-            lots = 2
+            lots = selected_lots
             tot_qty = lots * lot_sz
             t1 = round(ltp * 2.0, 2)
             t2 = round(ltp * 4.0, 2)
@@ -667,6 +671,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Print candidates locally without dispatching to Telegram")
     parser.add_argument("--auto-gtt", action="store_true", help="Force GTT placement regardless of time window (default: 14:30 and 15:05 only)")
     parser.add_argument("--no-gtt", action="store_true", help="Disable automatic Zerodha GTT placement")
+    parser.add_argument("--lots", type=int, default=None, help="Number of lots (default: 2 lots at 14:30, 4 lots at 15:05)")
     args = parser.parse_args()
 
     if args.time_slot:
@@ -687,7 +692,7 @@ def main():
     print("==================================================================================")
 
     kite = get_kite_client()
-    candidates = resolve_nifty_hero_zero_candidates(kite, single_best=not args.both)
+    candidates = resolve_nifty_hero_zero_candidates(kite, single_best=not args.both, lots=args.lots)
 
     if not candidates:
         print("⚠️ No qualified NIFTY Hero-Zero setups found.")
