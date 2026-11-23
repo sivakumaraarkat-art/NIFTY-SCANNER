@@ -500,7 +500,12 @@ def resolve_option_candidate(
         ]
         if sym_opts:
             expiries = sorted(list(set(i["expiry"] for i in sym_opts)))
-            nearest_exp = expiries[0]
+            if is_btst:
+                # BTST is an overnight hold: NEVER pick a contract expiring today!
+                valid_expiries = [e for e in expiries if (e - today).days >= 1]
+                nearest_exp = valid_expiries[0] if valid_expiries else expiries[0]
+            else:
+                nearest_exp = expiries[0]
             t_days = max(1, (nearest_exp - today).days)
             exp_opts = [i for i in sym_opts if i["expiry"] == nearest_exp]
             strikes = sorted(list(set(i["strike"] for i in exp_opts)))
@@ -519,13 +524,15 @@ def resolve_option_candidate(
 
     if kite is not None and tradingsymbol:
         try:
-            exch_prefix = "MCX" if is_crude else "NFO"
+            exch_prefix = "BFO" if (symbol in ["SENSEX", "BANKEX"] or (contract and contract.get("segment") == "BFO-OPT")) else ("MCX" if is_crude else "NFO")
             exch_key = f"{exch_prefix}:{tradingsymbol}"
             quotes = kite.quote([exch_key])
             if exch_key in quotes:
                 q_info = quotes[exch_key]
-                if q_info.get("last_price", 0) > 0:
+                if q_info.get("last_price", 0) > 0.05:
                     option_ltp = float(q_info["last_price"])
+                elif q_info.get("ohlc", {}).get("close", 0) > 0.05:
+                    option_ltp = float(q_info["ohlc"]["close"])
                 open_interest = int(q_info.get("oi", 0))
 
                 depth = q_info.get("depth", {})
@@ -571,13 +578,17 @@ def resolve_option_candidate(
 
     # Quality Shield 2: Smart Option Premium Threshold based on Lot Size & Strategy
     # For High-Lot Size stocks (1500, 2500, 3000, 4000 shares like SAIL, Tata Steel, RVNL, National Aluminium):
-    # Intraday: Allow ₹1.80 if strong conviction (Score >= 88)
-    # BTST: Higher floor (₹3.00 if high-lot + high-score) due to overnight theta risk
-    # For standard lot sizes (< 1500 shares): minimum premium ₹3.50 (intraday), ₹4.50 (BTST)
+    # Intraday: Allow ₹1.80 if strong conviction (Score >= 85)
+    # BTST: Higher floor (₹2.50-₹3.00 if high-lot + high-score) due to overnight theta risk
+    # For standard lot sizes (< 1500 shares): minimum premium ₹3.50 (intraday), ₹4.50 (BTST, or ₹3.50 near expiry)
     if is_btst:
-        min_premium = 3.00 if (lot_size >= 1500 and sentiment_score >= 88) else 4.50
+        is_expiry_week = t_days <= 3
+        if is_expiry_week:
+            min_premium = 2.00 if (lot_size >= 1500 and sentiment_score >= 85) else 3.50
+        else:
+            min_premium = 2.80 if (lot_size >= 1500 and sentiment_score >= 85) else 4.20
     else:
-        min_premium = 1.80 if (lot_size >= 1500 and sentiment_score >= 88) else 3.50
+        min_premium = 1.80 if (lot_size >= 1500 and sentiment_score >= 85) else 3.50
 
     if not is_index and not is_crude and option_ltp < min_premium:
         print(
@@ -586,8 +597,8 @@ def resolve_option_candidate(
         return None
 
     # Quality Shield 3: Tight Liquidity Spread Shield
-    # Intraday: Max 7.0% | BTST: Max 5.0% (overnight slippage risk higher)
-    max_spread = 5.0 if is_btst else 7.0
+    # Intraday: Max 7.5% | BTST: Max 6.5% (overnight slippage risk higher)
+    max_spread = 6.5 if is_btst else 7.5
     if spread_pct > max_spread:
         print(
             f"⚠️ SKIPPED: {symbol} {tradingsymbol} bid-ask spread too wide ({spread_pct:.1f}% > {max_spread:.1f}%). Slippage risk."
@@ -770,7 +781,7 @@ def resolve_all_candidates(
         for idx in ["NIFTY", "SENSEX"]:
             # Check if we have sentiment data for this index in candidates_list
             idx_sentiment = "BULLISH"  # default
-            idx_score = 85
+            idx_score = max(min_score, 90)
             for item in candidates_list:
                 if isinstance(item, tuple) and len(item) >= 2:
                     sym = item[0].upper()

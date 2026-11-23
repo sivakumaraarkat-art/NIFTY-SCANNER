@@ -91,7 +91,7 @@ NSE_HOLIDAYS_2026 = [
     datetime(2026, 10, 2),   # Gandhi Jayanti (observed)
     datetime(2026, 10, 25),  # Diwali (approx)
     datetime(2026, 11, 1),   # Diwali (day 2)
-    datetime(2026, 11, 14),  # Guru Nanak Jayanti
+    datetime(2026, 11, 24),  # Guru Nanak Jayanti / Prakash Gurpurb
     datetime(2026, 12, 25),  # Christmas
 ]
 
@@ -395,8 +395,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-score",
         type=int,
-        default=86,
-        help="Minimum combined score to qualify (0-100, default: 86 for high conviction)",
+        default=90,
+        help="Minimum combined score to qualify (0-100, default: 90 for elite conviction)",
     )
     parser.add_argument(
         "--account-size",
@@ -434,7 +434,7 @@ def main():
     args = parse_args()
     log_dir = logs_directory(__file__, args.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
-    if not args.dry_run and batch_path(log_dir, now_ist().date()).exists():
+    if not args.dry_run and not args.force and batch_path(log_dir, now_ist().date()).exists():
         print("BTST batch already exists today. Skipping rerun to preserve the original alerts.")
         return
 
@@ -512,6 +512,27 @@ def main():
         c for c in resolved
         if c['symbol'] in INDEX_SYMBOLS and passes_theta_filter(c['theta'], c['ltp'])
     ]
+
+    # Guarantee 2 strikes for BTST: If fewer than 2 qualify at min_score, fallback to top candidates
+    if len(stock_candidates) + len(index_candidates) < 2 and candidates_input:
+        print(f"[*] Fallback activated: Only {len(stock_candidates) + len(index_candidates)} candidate(s) qualified at BTST score >={args.min_score}. Lowering threshold to ensure 2 strikes are delivered...")
+        fallback_resolved = resolve_all_candidates(
+            candidates_input,
+            is_btst=True,
+            include_nifty=args.include_nifty,
+            account_size=args.account_size,
+            min_score=max(75, args.min_score - 10),
+        )
+        existing_keys = {c.get("option_symbol") for c in stock_candidates + index_candidates}
+        for c in fallback_resolved:
+            if c.get("option_symbol") not in existing_keys and passes_theta_filter(c.get("theta", 0), c.get("ltp", 0)):
+                if c["symbol"] not in INDEX_SYMBOLS:
+                    stock_candidates.append(c)
+                else:
+                    index_candidates.append(c)
+                existing_keys.add(c.get("option_symbol"))
+            if len(stock_candidates) + len(index_candidates) >= 2:
+                break
 
     if not stock_candidates and not index_candidates:
         print("\n⚠️ No qualified BTST candidates found matching score and theta criteria.")

@@ -577,7 +577,9 @@ def deploy_automated_nifty_gtt(kite: Any, candidate: Dict[str, Any]) -> Optional
 
     min_buffer = max(0.50, round(ltp * 0.05, 1))
     trigger_price = round(ltp + min_buffer, 1)
-    limit_price = round(trigger_price + 0.50, 1)
+    # Marketable Limit Buffer: prevents 'Triggered but Unfilled' during fast gamma spikes
+    slippage_buffer = max(1.50, round(trigger_price * 0.08, 1))
+    limit_price = round(trigger_price + slippage_buffer, 1)
 
     print(f"🚀 Placing automated Zerodha GTT for {tradingsymbol} @ Trigger ₹{trigger_price:.1f} | Limit ₹{limit_price:.1f} (Qty: {qty})...")
 

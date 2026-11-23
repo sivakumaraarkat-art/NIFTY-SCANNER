@@ -81,7 +81,7 @@ NSE_HOLIDAYS_2026 = [
     datetime(2026, 10, 2),   # Gandhi Jayanti (observed)
     datetime(2026, 10, 25),  # Diwali (approx)
     datetime(2026, 11, 1),   # Diwali (day 2)
-    datetime(2026, 11, 14),  # Guru Nanak Jayanti
+    datetime(2026, 11, 24),  # Guru Nanak Jayanti / Prakash Gurpurb
     datetime(2026, 12, 25),  # Christmas
 ]
 
@@ -416,6 +416,15 @@ def print_powerful_sl_results(
 
     already_seen = set(existing_symbols or [])
     fresh_candidates = [c for c in candidates if c.get("option_symbol") not in already_seen]
+    if len(fresh_candidates) < max_candidates:
+        # Guarantee 2 strikes: If fresh candidates are fewer than max_candidates, fill from available candidates
+        seen_fresh = {c.get("option_symbol") for c in fresh_candidates}
+        for c in candidates:
+            if c.get("option_symbol") not in seen_fresh:
+                fresh_candidates.append(c)
+                seen_fresh.add(c.get("option_symbol"))
+            if len(fresh_candidates) >= max_candidates:
+                break
     if not fresh_candidates:
         fresh_candidates = candidates
 
@@ -590,8 +599,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-score",
         type=int,
-        default=90,
-        help="Minimum combined score to qualify (0-100, default: 90 for elite conviction)",
+        default=85,
+        help="Minimum combined score to qualify (0-100, default: 85 for high conviction)",
     )
     parser.add_argument(
         "--account-size",
@@ -761,6 +770,24 @@ def main():
         account_size=args.account_size,
         min_score=args.min_score,
     )
+
+    # Guarantee 2 strikes per run: If fewer than scan_limit (2) qualify at min_score, fallback to top candidates
+    if len(resolved) < scan_limit and candidates_input:
+        print(f"[*] Fallback activated: Only {len(resolved)} candidate(s) met score >={args.min_score}. Lowering threshold to ensure {scan_limit} strikes are provided...")
+        fallback_resolved = resolve_all_candidates(
+            candidates_input,
+            is_btst=False,
+            include_nifty=False,
+            account_size=args.account_size,
+            min_score=max(65, args.min_score - 15),
+        )
+        resolved_syms = {r.get("option_symbol") for r in resolved}
+        for r in fallback_resolved:
+            if r.get("option_symbol") not in resolved_syms:
+                resolved.append(r)
+                resolved_syms.add(r.get("option_symbol"))
+            if len(resolved) >= scan_limit:
+                break
 
     if not resolved:
         print("\n⚠️ No qualified option candidates found matching the score criteria.")
