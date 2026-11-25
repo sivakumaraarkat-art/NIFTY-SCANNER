@@ -411,6 +411,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--log-dir", help="Shared BTST log directory (or BTST_LOG_DIR)")
     parser.add_argument("--dry-run", action="store_true", help="Resolve and print only; no Telegram or daily batch")
+    parser.add_argument("--force", action="store_true", help="Bypass batch lock and re-run scan")
     return parser.parse_args()
 
 
@@ -434,7 +435,7 @@ def main():
     args = parse_args()
     log_dir = logs_directory(__file__, args.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
-    if not args.dry_run and not args.force and batch_path(log_dir, now_ist().date()).exists():
+    if not args.dry_run and not getattr(args, 'force', False) and batch_path(log_dir, now_ist().date()).exists():
         print("BTST batch already exists today. Skipping rerun to preserve the original alerts.")
         return
 
