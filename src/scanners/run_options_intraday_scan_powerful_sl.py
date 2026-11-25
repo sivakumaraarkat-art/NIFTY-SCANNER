@@ -32,9 +32,10 @@ import json
 import time
 import os
 import glob
+import re
 from datetime import datetime, time as time_type, timedelta
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 # Ensure project root in sys.path
 ROOT = Path(__file__).resolve().parents[2]
@@ -308,13 +309,83 @@ def get_live_market_movers(kite, nfo_instruments, top_n=8) -> list:
         return []
 
 
+SECTOR_MAP = {
+    # Life Insurance
+    "HDFCLIFE": "LIFE_INSURANCE", "ICICILIFE": "LIFE_INSURANCE", "ICICIPRULI": "LIFE_INSURANCE",
+    "SBILIFE": "LIFE_INSURANCE", "MFSL": "LIFE_INSURANCE", "LICI": "LIFE_INSURANCE",
+
+    # Private Banks
+    "HDFCBANK": "BANK_PVT", "ICICIBANK": "BANK_PVT", "AXISBANK": "BANK_PVT", "KOTAKBANK": "BANK_PVT",
+    "INDUSINDBK": "BANK_PVT", "BANDHANBNK": "BANK_PVT", "FEDERALBNK": "BANK_PVT",
+    "IDFCFIRSTB": "BANK_PVT", "RBLBANK": "BANK_PVT", "CUB": "BANK_PVT",
+
+    # PSU Banks
+    "SBIN": "BANK_PSU", "PNB": "BANK_PSU", "BANKBARODA": "BANK_PSU", "CANBK": "BANK_PSU",
+    "UNIONBANK": "BANK_PSU", "BANKINDIA": "BANK_PSU", "INDIANB": "BANK_PSU",
+
+    # NBFC / Financials
+    "BAJFINANCE": "NBFC", "BAJAJFINSV": "NBFC", "CHOLAFIN": "NBFC", "SHRIRAMFIN": "NBFC",
+    "MUTHOOTFIN": "NBFC", "MANAPPURAM": "NBFC", "RECLTD": "NBFC", "PFC": "NBFC",
+    "LTF": "NBFC", "ABCAPITAL": "NBFC", "POLICYBZR": "FINTECH",
+
+    # IT / Technology
+    "TCS": "IT", "INFY": "IT", "HCLTECH": "IT", "WIPRO": "IT", "TECHM": "IT",
+    "LTIM": "IT", "PERSISTENT": "IT", "COFORGE": "IT", "MPHASIS": "IT", "LTTS": "IT", "OFSS": "IT",
+
+    # Auto & Auto Ancillaries
+    "MARUTI": "AUTO", "TATAMOTORS": "AUTO", "M&M": "AUTO", "BAJAJ-AUTO": "AUTO",
+    "HEROMOTOCO": "AUTO", "EICHERMOT": "AUTO", "TVSMOTOR": "AUTO", "ASHOKLEY": "AUTO",
+    "MOTHERSON": "AUTO_ANCILLARY", "BHARATFORG": "AUTO_ANCILLARY", "HYUNDAI": "AUTO",
+    "ATHERENERG": "AUTO", "BOSCHLTD": "AUTO_ANCILLARY",
+
+    # Metals & Mining
+    "TATASTEEL": "METALS", "JSWSTEEL": "METALS", "HINDALCO": "METALS", "VEDL": "METALS",
+    "JINDALSTEL": "METALS", "NATIONALUM": "METALS", "NMDC": "METALS", "SAIL": "METALS",
+    "COALINDIA": "MINING",
+
+    # Pharma & Healthcare
+    "SUNPHARMA": "PHARMA", "DRREDDY": "PHARMA", "CIPLA": "PHARMA", "DIVISLAB": "PHARMA",
+    "LUPIN": "PHARMA", "AUROPHARMA": "PHARMA", "ALKEM": "PHARMA", "ZYDUSLIFE": "PHARMA",
+    "TORNTPHARM": "PHARMA", "BIOCON": "PHARMA", "GLENMARK": "PHARMA", "APOLLOHOSP": "HEALTHCARE",
+
+    # FMCG & Consumption
+    "ITC": "FMCG", "HINDUNILVR": "FMCG", "NESTLEIND": "FMCG", "BRITANNIA": "FMCG",
+    "DABUR": "FMCG", "MARICO": "FMCG", "TATACONSUM": "FMCG", "GODREJCP": "FMCG", "COLPAL": "FMCG",
+
+    # Oil, Gas & Energy
+    "RELIANCE": "OIL_GAS", "ONGC": "OIL_GAS", "IOC": "OIL_GAS", "BPCL": "OIL_GAS",
+    "HPCL": "OIL_GAS", "GAIL": "OIL_GAS", "PETRONET": "OIL_GAS", "OIL": "OIL_GAS",
+
+    # Power & Capital Goods / Infra
+    "NTPC": "POWER", "POWERGRID": "POWER", "TATAPOWER": "POWER", "ADANIGREEN": "POWER",
+    "ADANIPOWER": "POWER", "NHPC": "POWER", "BHEL": "CAPITAL_GOODS", "LT": "INFRA",
+    "SIEMENS": "CAPITAL_GOODS", "ABB": "CAPITAL_GOODS", "CGPOWER": "CAPITAL_GOODS",
+
+    # Electronics & EMS
+    "KAYNES": "EMS", "SYRMA": "EMS", "DIXON": "EMS", "AMBER": "EMS",
+
+    # Telecom & Internet
+    "BHARTIARTL": "TELECOM", "IDEA": "TELECOM", "INDUSTOWER": "TELECOM",
+    "TRENT": "RETAIL", "DMART": "RETAIL", "ZOMATO": "INTERNET", "SWIGGY": "INTERNET",
+}
+
+
+def get_stock_sector(symbol: str) -> Optional[str]:
+    """Return canonical sector slug for an F&O stock, or None if unmapped."""
+    return SECTOR_MAP.get(symbol.upper().strip()) if symbol else None
+
+
 # ──────────────────────────────────────────────────────────────
 # 3c. DAILY TRADE CAP & CIRCUIT BREAKER AUDIT
 # ──────────────────────────────────────────────────────────────
 def get_today_intraday_trade_stats(log_dir: Path, today_str: str) -> dict:
-    """Check how many unique trades were already logged today and how many SLs have hit."""
+    """Check how many unique trades were already logged today and track stop loss hits."""
     unique_symbols = set()
     sl_hits = 0
+    loss_options = set()
+    loss_underlying = set()
+    open_options = set()
+    open_underlying = set()
 
     state_file = log_dir / "intraday_trade_state.json"
     if state_file.exists():
@@ -325,9 +396,22 @@ def get_today_intraday_trade_stats(log_dir: Path, today_str: str) -> dict:
                 for k, t in trades.items():
                     if t.get("trade_date") == today_str:
                         opt_sym = t.get("option_symbol", k)
+                        sym = t.get("symbol")
+                        if not sym and opt_sym:
+                            m = re.match(r"^([A-Z&-]+)\d{2}[A-Z]{3}", opt_sym)
+                            sym = m.group(1) if m else None
                         unique_symbols.add(opt_sym)
-                        if t.get("close_reason") == "SL_HIT" or t.get("status") == "SL_HIT":
+                        status = t.get("status", "")
+                        close_reason = t.get("close_reason", "")
+                        if status == "OPEN":
+                            open_options.add(opt_sym)
+                            if sym:
+                                open_underlying.add(sym)
+                        if close_reason == "SL_HIT" or status == "SL_HIT":
                             sl_hits += 1
+                            loss_options.add(opt_sym)
+                            if sym:
+                                loss_underlying.add(sym)
         except Exception:
             pass
 
@@ -338,9 +422,9 @@ def get_today_intraday_trade_stats(log_dir: Path, today_str: str) -> dict:
                 data = json.load(f)
                 cands = data.get("candidates", [])
                 for c in cands:
-                    sym = c.get("option_symbol")
-                    if sym:
-                        unique_symbols.add(sym)
+                    opt_sym = c.get("option_symbol")
+                    if opt_sym:
+                        unique_symbols.add(opt_sym)
         except Exception:
             pass
 
@@ -348,6 +432,10 @@ def get_today_intraday_trade_stats(log_dir: Path, today_str: str) -> dict:
         "today_trade_count": len(unique_symbols),
         "today_symbols": list(unique_symbols),
         "sl_hits": sl_hits,
+        "loss_options": list(loss_options),
+        "loss_underlying": list(loss_underlying),
+        "open_options": list(open_options),
+        "open_underlying": list(open_underlying),
     }
 
 
@@ -402,6 +490,10 @@ def print_powerful_sl_results(
     max_candidates: int = 2,
     existing_symbols: list[str] | None = None,
     market_regime: str = "NEUTRAL ⚖️",
+    loss_options: list[str] | None = None,
+    loss_underlying: list[str] | None = None,
+    open_options: list[str] | None = None,
+    open_underlying: list[str] | None = None,
 ) -> list[dict]:
     """Print intraday results with powerful 4-layer SL, strict daily cap, and accurate position sizing."""
     results = []
@@ -414,24 +506,62 @@ def print_powerful_sl_results(
     print(f"✅ Market hours check: {is_market_hours()}")
     print(f"🛡️  Max Trades Allowed in this scan: {max_candidates}\n")
 
-    already_seen = set(existing_symbols or [])
-    fresh_candidates = [c for c in candidates if c.get("option_symbol") not in already_seen]
+    already_seen_opts = set(existing_symbols or [])
+    banned_exact_strikes = set(loss_options or [])
+    loss_stocks = set(loss_underlying or [])
+    open_opts = set(open_options or [])
+
+    fresh_candidates = []
+    for c in candidates:
+        opt_sym = c.get("option_symbol")
+        sym = c.get("symbol")
+        score = c.get("score", 0)
+
+        # 1. Zero repeat loss: Exact contract that already hit SL today is 100% blocked
+        if opt_sym in banned_exact_strikes:
+            print(f"🛡️ SKIPPED {opt_sym}: Exact contract hit Stop Loss earlier today. Banned from re-entry to protect capital.")
+            continue
+
+        # 2. Block duplicate entry on currently active OPEN contracts
+        if opt_sym in open_opts:
+            print(f"🛡️ SKIPPED {opt_sym}: Position currently active and open. Skipping duplicate entry.")
+            continue
+
+        # 3. For stocks that hit SL earlier today, only permit re-entry with Elite Conviction (Score >= 95)
+        if sym in loss_stocks:
+            if score < 95:
+                print(f"🛡️ SKIPPED {opt_sym}: {sym} took an earlier loss today. Re-entry requires Elite Conviction (Score >= 95, current: {score}) to avoid repeat traps.")
+                continue
+            else:
+                print(f"🔥 ELITE RE-ENTRY: {opt_sym}: {sym} took an earlier loss, but re-qualifies with Elite Conviction ({score}/100) and strong momentum!")
+
+        # 4. Skip contracts already logged in today's scans
+        if opt_sym in already_seen_opts:
+            continue
+
+        fresh_candidates.append(c)
+
     if len(fresh_candidates) < max_candidates:
-        # Guarantee 2 strikes: If fresh candidates are fewer than max_candidates, fill from available candidates
+        # Guarantee 2 strikes: Fill only with safe candidates that don't violate loss/open rules
         seen_fresh = {c.get("option_symbol") for c in fresh_candidates}
         for c in candidates:
-            if c.get("option_symbol") not in seen_fresh:
+            opt_sym = c.get("option_symbol")
+            sym = c.get("symbol")
+            score = c.get("score", 0)
+            if opt_sym in banned_exact_strikes or opt_sym in open_opts:
+                continue
+            if sym in loss_stocks and score < 95:
+                continue
+            if opt_sym not in seen_fresh:
                 fresh_candidates.append(c)
-                seen_fresh.add(c.get("option_symbol"))
+                seen_fresh.add(opt_sym)
             if len(fresh_candidates) >= max_candidates:
                 break
-    if not fresh_candidates:
-        fresh_candidates = candidates
 
     # Dynamic Market Situation & Technical Selection:
     # Not mandatory 1 CE + 1 PE! It can dynamically give 2 CEs on a bullish market,
     # 2 PEs on a bearish market, or 1 CE + 1 PE on a two-way market based on purest technical strength.
-    # Priority: Repeated Conviction (50) > Verified News (30) > Technical Mover (0) + Market Regime Alignment (+5)
+    # Same sector is permitted if setups have strong conviction (Score >= 90) and high volume.
     def sort_key(c):
         is_news = "Top Gainer" not in c.get("sentiment_catalyst", "") and "Top Breakdown" not in c.get("sentiment_catalyst", "")
         is_repeated = "REPEATED CONVICTION" in c.get("sentiment_catalyst", "") or bool((c.get("meta") or {}).get("sustained_conviction", False))
@@ -448,7 +578,23 @@ def print_powerful_sl_results(
         return priority + c.get("score", 0) + regime_bonus
 
     sorted_candidates = sorted(fresh_candidates, key=sort_key, reverse=True)
-    selected = sorted_candidates[:max_candidates]
+
+    # Sector-aware selection: allow same sector if score >= 90, otherwise diversify across sectors
+    selected = []
+    seen_sectors = set()
+    for c in sorted_candidates:
+        sym = c.get("symbol")
+        score = c.get("score", 0)
+        sector = get_stock_sector(sym)
+        # If sector already represented in this batch, allow only if good conviction (Score >= 90)
+        if sector and sector in seen_sectors and score < 90:
+            print(f"ℹ️ DIVERSIFICATION: Skipping secondary {sym} (Score {score}) because sector '{sector}' already selected with higher conviction.")
+            continue
+        selected.append(c)
+        if sector:
+            seen_sectors.add(sector)
+        if len(selected) >= max_candidates:
+            break
 
     ce_count = sum(1 for c in selected if str(c.get("option_type", "")).upper() == "CE")
     pe_count = sum(1 for c in selected if str(c.get("option_type", "")).upper() == "PE")
@@ -478,7 +624,7 @@ def print_powerful_sl_results(
             late_note = "⚡ Late Scalp (+7% T1 | -5% SL | 15:25 EOD Exit)"
             c["warning_tag"] = f"{w_tag} • {late_note}" if w_tag else late_note
 
-        contract_str = c.get('option_symbol', f"{c['symbol']} {c['strike']:.0f} {c['option_type']}")
+        contract_str = c.get('option_symbol') or f"{c.get('symbol')} {c.get('strike', 0):.0f} {c.get('option_type')}"
         spot_str = f"(Spot: ₹{c.get('spot_price', 0):,.2f})" if c.get('spot_price', 0) > 0 else ""
         print(f"\n{'─' * 100}")
         print(f"{i}. 🎯 {contract_str} {spot_str} | Score: {c['score']}/100 [{c.get('sentiment_catalyst', 'CATALYST')}]")
@@ -504,8 +650,8 @@ def print_powerful_sl_results(
 
         # Anti-Whipsaw Features
         print(f"\n🔄 Anti-Whipsaw Features:")
-        print(f"   Trailing SL trigger:   ₹{c['trailing_trigger']:.2f} (+5% profit)")
-        print(f"   New SL if triggered:   ₹{c['trailing_sl_new']:.2f}")
+        print(f"   Trailing SL trigger:   ₹{c.get('trailing_trigger', round(c['ltp'] * 1.08, 2)):.2f} (+8% profit)")
+        print(f"   New SL if triggered:   ₹{c.get('trailing_sl_new', round(c['ltp'] * 1.01, 2)):.2f}")
 
         # Position Sizing (1% risk rule based on whole lots)
         lots = c.get('recommended_qty', 1)
@@ -803,6 +949,10 @@ def main():
         max_candidates=scan_limit,
         existing_symbols=stats["today_symbols"],
         market_regime=regime_str,
+        loss_options=stats.get("loss_options", []),
+        loss_underlying=stats.get("loss_underlying", []),
+        open_options=stats.get("open_options", []),
+        open_underlying=stats.get("open_underlying", []),
     )
 
     # Save execution log with an explicit signal observation time.

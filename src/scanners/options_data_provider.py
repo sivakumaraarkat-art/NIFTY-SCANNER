@@ -371,8 +371,9 @@ def calculate_powerful_sl_engine(
         market_vol = "normal"
 
     if not is_btst:
-        # Intraday trades hold for 1-3 hours (not full days); calibrate buffers to disciplined 7-10% noise ceiling
-        delta_mult = 0.10 if market_vol == "normal" else (0.12 if market_vol == "volatile" else 0.14)
+        # Intraday trades hold for 1-3 hours (not full days); calibrate buffers to disciplined 8-13.5% noise ceiling
+        # (Protects capital without premature stop-outs on normal 0.7-1.0% stock wicks)
+        delta_mult = 0.12 if market_vol == "normal" else (0.15 if market_vol == "volatile" else 0.18)
         theta_mult = 1.0 if market_vol == "normal" else (1.2 if market_vol == "volatile" else 1.5)
         vega_mult = 2.0 if market_vol != "extreme" else 3.0
 
@@ -382,11 +383,11 @@ def calculate_powerful_sl_engine(
         layer4_vega_buffer = vega_abs * vega_mult
 
         total_buffer = layer1_buffer + layer2_vol_buffer + layer3_theta_buffer + layer4_vega_buffer
-        # Disciplined Intraday SL: Noise buffer between 7% and 10% (protects capital, never arbitrary 20%)
-        total_buffer = max(entry_price * 0.07, min(total_buffer, entry_price * 0.10))
+        # Disciplined Intraday SL: Noise buffer between 8% and 13.5% (absorbs normal stock noise without loose 20% risk)
+        total_buffer = max(entry_price * 0.08, min(total_buffer, entry_price * 0.135))
         powerful_sl = round(entry_price - total_buffer, 2)
 
-        trailing_trigger = round(entry_price * 1.06, 2)
+        trailing_trigger = round(entry_price * 1.08, 2)
         trailing_sl_new = round(entry_price * 1.01, 2)
     else:
         layer1_buffer = entry_price * (abs(delta) * 0.15)
@@ -597,8 +598,8 @@ def resolve_option_candidate(
         return None
 
     # Quality Shield 3: Tight Liquidity Spread Shield
-    # Intraday: Max 7.5% | BTST: Max 6.5% (overnight slippage risk higher)
-    max_spread = 6.5 if is_btst else 7.5
+    # Intraday: Max 2.5% | BTST: Max 3.5% (protects stop loss from being eaten by bid-ask slippage)
+    max_spread = 3.5 if is_btst else 2.5
     if spread_pct > max_spread:
         print(
             f"⚠️ SKIPPED: {symbol} {tradingsymbol} bid-ask spread too wide ({spread_pct:.1f}% > {max_spread:.1f}%). Slippage risk."
@@ -613,6 +614,20 @@ def resolve_option_candidate(
             f"⚠️ SKIPPED: {symbol} {tradingsymbol} contract volume too low ({opt_vol} contracts < 200). Illiquid contract."
         )
         return None
+
+    # Quality Shield 5: Anti-Exhaustion / Overextended Impulse Shield (Intraday only)
+    # Rejects contracts that have already surged vertically (> 55% from open) and are trading near the day high (> 92%)
+    if not is_btst and not is_index and not is_crude and isinstance(q_info, dict):
+        opt_open = float(q_info.get("ohlc", {}).get("open", 0.0))
+        opt_high = float(q_info.get("ohlc", {}).get("high", 0.0))
+        if opt_open > 0.0 and opt_high > 0.0:
+            surge_from_open = ((option_ltp - opt_open) / opt_open) * 100.0
+            pct_of_high = (option_ltp / opt_high) * 100.0 if opt_high > 0 else 0.0
+            if surge_from_open > 55.0 and pct_of_high > 92.0:
+                print(
+                    f"⚠️ SKIPPED: {symbol} {tradingsymbol} overextended impulse (+{surge_from_open:.1f}% from open, at {pct_of_high:.1f}% of day high). Mean-reversion risk."
+                )
+                return None
 
     iv = implied_volatility(option_ltp, spot_price, atm_strike, t_days, r=0.07, opt_type=opt_type)
     delta, theta, vega = calculate_greeks(spot_price, atm_strike, t_days, r=0.07, iv_pct=iv, opt_type=opt_type)
@@ -629,9 +644,9 @@ def resolve_option_candidate(
     sl_risk = sl_data["sl_risk"]
 
     if not is_btst:
-        # Intraday: T1 >= 1.35R (min +12.5%), T2 >= 2.35R (min +22.0%)
-        t1_gain = max(round(sl_risk * 1.35, 2), round(option_ltp * 0.125, 2))
-        t2_gain = max(round(sl_risk * 2.35, 2), round(option_ltp * 0.22, 2))
+        # Intraday: T1 >= 1.35R (min +14.0%), T2 >= 2.35R (min +24.0%)
+        t1_gain = max(round(sl_risk * 1.35, 2), round(option_ltp * 0.14, 2))
+        t2_gain = max(round(sl_risk * 2.35, 2), round(option_ltp * 0.24, 2))
         t1 = round(option_ltp + t1_gain, 2)
         t2 = round(option_ltp + t2_gain, 2)
     else:
