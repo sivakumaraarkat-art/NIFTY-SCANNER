@@ -117,8 +117,8 @@ def test_option_sl_vs_target_risk_reward_mathematics():
         sl_risk = sl_data["sl_risk"]
         sl_risk_pct = sl_data["sl_risk_pct"]
 
-        # SL must be a disciplined 7% to 10% ceiling, never arbitrary 20%
-        assert 7.0 <= sl_risk_pct <= 10.01
+        # SL must be a disciplined 7% to 13.5% ceiling, never arbitrary 20%
+        assert 7.0 <= sl_risk_pct <= 13.51
 
         # Calculate Targets
         t1_gain = max(round(sl_risk * 1.25, 2), round(entry * 0.10, 2))

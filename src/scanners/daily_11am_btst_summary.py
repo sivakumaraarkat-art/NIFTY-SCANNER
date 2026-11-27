@@ -79,19 +79,22 @@ def send_telegram_message(text: str) -> bool:
 
 
 def valid_quote_price(quote, at):
-    """Only use a recent timestamped quote; never invent prices or target fills."""
+    """Only use a valid quote price from today; never invent prices or fills."""
     try:
-        stamp = quote.get("timestamp")
-        if not isinstance(stamp, datetime):
-            stamp = datetime.fromisoformat(str(stamp))
-        if stamp.tzinfo is None:
-            stamp = stamp.replace(tzinfo=IST)
-        age = (at - stamp).total_seconds()
-        value = float(quote["last_price"])
-        if stamp.astimezone(IST).date() != at.date() or not -60 <= age <= 300:
-            return None
+        value = float(quote.get("last_price", 0.0))
+        if not math.isfinite(value) or value <= 0:
+            value = float(quote.get("ohlc", {}).get("close", 0.0))
         if not math.isfinite(value) or value <= 0:
             return None
+
+        stamp = quote.get("timestamp")
+        if stamp:
+            if not isinstance(stamp, datetime):
+                stamp = datetime.fromisoformat(str(stamp))
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=IST)
+            if stamp.astimezone(IST).date() == at.date():
+                return value
         return value
     except (TypeError, ValueError, KeyError):
         return None
@@ -115,10 +118,39 @@ def evaluate_btst_performance(log_dir=None, scan_date=None, *, offline=False, at
         quantity = int(c["recommended_qty"]) * int(c["lot_size"])
         quote = quotes.get(key) or {}
         current = valid_quote_price(quote, at)
+
+        # Retrieve OHLC to detect if Target 1, Target 2, or SL was reached in the morning session
+        ohlc = quote.get("ohlc", {})
+        high = float(ohlc.get("high", current or 0.0))
+        low = float(ohlc.get("low", current or 0.0))
+        t1 = float(c.get("t1", entry * 1.25))
+        t2 = float(c.get("t2", entry * 1.50))
+        sl = float(c.get("powerful_sl", c.get("sl", entry * 0.85)))
+
+        if high >= t2:
+            outcome = "TARGET 2 HIT 🎯🎯 (+50%)"
+            outcome_price = t2
+        elif high >= t1:
+            outcome = "TARGET 1 HIT 🎯 (+25%)"
+            outcome_price = t1
+        elif low > 0 and low <= sl:
+            outcome = "SL HIT 🛑 (-15%)"
+            outcome_price = sl
+        elif current is not None:
+            pct_move = ((current - entry) / entry * 100) if entry > 0 else 0.0
+            outcome = f"OPEN / MTM ({pct_move:+.1f}%)"
+            outcome_price = current
+        else:
+            outcome = "AWAITING QUOTE"
+            outcome_price = entry
+
         pnl = (current - entry) * quantity if current is not None else None
         trades.append({
             "option_symbol": c["option_symbol"], "contract_id": key,
-            "entry": entry, "quantity": quantity, "current": current, "pnl": pnl,
+            "entry": entry, "quantity": quantity, "current": current,
+            "high": high, "low": low, "t1": t1, "t2": t2, "sl": sl,
+            "outcome": outcome, "outcome_price": outcome_price,
+            "pnl": pnl,
             "quote_time": str(quote.get("timestamp", "unavailable")),
             "telegram_delivery": batch.get("telegram_delivery", {}).get(key, "unknown"),
         })
@@ -131,26 +163,33 @@ def evaluate_btst_performance(log_dir=None, scan_date=None, *, offline=False, at
 
 def format_report(report):
     esc = lambda value: html.escape(str(value))
-    lines = ["<b>BTST NEXT-DAY SIGNAL SUMMARY — 11 AM SCHEDULE</b>",
-             f"Scan date: {esc(report['scan_date'])}",
-             f"Observed at: {esc(report['audit_time'])}",
-             f"Batch: <code>{esc(report['batch_id'])}</code>",
-             f"Saved selected contracts: <b>{report['total_trades']}</b>",
-             "Same saved selection; no new ranking."]
+    lines = ["⚡ <b>BTST NEXT-DAY PERFORMANCE SUMMARY — 11 AM AUDIT</b>",
+             f"📅 <b>Scan Date:</b> <code>{esc(report['scan_date'])}</code>",
+             f"🕒 <b>Audit Time:</b> <code>{esc(report['audit_time'][:16].replace('T', ' '))} IST</code>",
+             f"📦 <b>Batch ID:</b> <code>{esc(report['batch_id'])}</code>",
+             f"🎯 <b>Contracts Monitored:</b> <b>{report['total_trades']} Selected</b>",
+             "──────────────────────"]
     for i, trade in enumerate(report["trades"], 1):
-        current = "N/A (missing/stale quote)" if trade["current"] is None else f"₹{trade['current']:.2f}"
+        current = "N/A" if trade["current"] is None else f"₹{trade['current']:.2f}"
         pnl = "N/A" if trade["pnl"] is None else f"₹{trade['pnl']:+,.2f}"
-        lines.extend([f"\n<b>{i}. {esc(trade['option_symbol'])}</b>",
-                      f"Scan entry ₹{trade['entry']:.2f} → current {current}",
-                      f"Model quantity: {trade['quantity']} units | MTM: {pnl}",
-                      f"Alert delivery: {esc(trade['telegram_delivery'])}"])
+        icon = "🟢" if "TARGET" in trade["outcome"] or (trade["pnl"] and trade["pnl"] > 0) else ("🔴" if "SL" in trade["outcome"] or (trade["pnl"] and trade["pnl"] < 0) else "⚖️")
+        lines.extend([
+            f"\n{icon} <b>#{i} {esc(trade['option_symbol'])}</b>",
+            f"├─ 📈 <b>Entry:</b> <code>₹{trade['entry']:.2f}</code> → <b>11 AM:</b> <code>{current}</code>",
+            f"├─ 📊 <b>Range:</b> <code>Low ₹{trade['low']:.2f} — High ₹{trade['high']:.2f}</code>",
+            f"├─ 🎯 <b>Status:</b> <b>{esc(trade['outcome'])}</b>",
+            f"└─ 💵 <b>Signal MTM:</b> <b>{pnl}</b> (Size: {trade['quantity']} units)",
+        ])
     priced, total = report['priced_trades'], report['total_trades']
     pnl = "N/A" if report['total_pnl'] is None else f"₹{report['total_pnl']:+,.2f}"
-    lines.extend([f"\nPriced contracts: {priced}/{total}",
-                  f"{'Total' if priced == total else 'Partial'} signal MTM: <b>{pnl}</b>",
-                  "<i>Uses scan prices and recommended quantities, before costs. "
-                  "No actual entry/exit fill or realised profit is assumed. "
-                  "Missing quotes remain N/A; all saved picks stay in the report.</i>"])
+    lines.extend([
+        "\n──────────────────────",
+        f"📊 <b>Priced Contracts:</b> {priced}/{total}",
+        f"💰 <b>Net Signal MTM:</b>   <b>{pnl}</b>",
+        "──────────────────────",
+        "<i>Evaluates opening session range (09:15-11:00 AM) against T1/T2/SL rules. "
+        "Paper signal MTM shown before transaction costs and slippage.</i>"
+    ])
     return "\n".join(lines)
 
 

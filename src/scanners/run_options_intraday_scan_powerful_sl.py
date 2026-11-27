@@ -381,6 +381,8 @@ def get_stock_sector(symbol: str) -> Optional[str]:
 def get_today_intraday_trade_stats(log_dir: Path, today_str: str) -> dict:
     """Check how many unique trades were already logged today and track stop loss hits."""
     unique_symbols = set()
+    today_underlying = set()
+    successful_underlying = set()
     sl_hits = 0
     loss_options = set()
     loss_underlying = set()
@@ -401,6 +403,8 @@ def get_today_intraday_trade_stats(log_dir: Path, today_str: str) -> dict:
                             m = re.match(r"^([A-Z&-]+)\d{2}[A-Z]{3}", opt_sym)
                             sym = m.group(1) if m else None
                         unique_symbols.add(opt_sym)
+                        if sym:
+                            today_underlying.add(sym)
                         status = t.get("status", "")
                         close_reason = t.get("close_reason", "")
                         if status == "OPEN":
@@ -412,6 +416,9 @@ def get_today_intraday_trade_stats(log_dir: Path, today_str: str) -> dict:
                             loss_options.add(opt_sym)
                             if sym:
                                 loss_underlying.add(sym)
+                        elif close_reason in ("T1_HIT", "T2_HIT") or (t.get("pnl", 0) > 0 and status == "CLOSED"):
+                            if sym:
+                                successful_underlying.add(sym)
         except Exception:
             pass
 
@@ -425,12 +432,17 @@ def get_today_intraday_trade_stats(log_dir: Path, today_str: str) -> dict:
                     opt_sym = c.get("option_symbol")
                     if opt_sym:
                         unique_symbols.add(opt_sym)
+                    sym = c.get("symbol")
+                    if sym:
+                        today_underlying.add(sym)
         except Exception:
             pass
 
     return {
         "today_trade_count": len(unique_symbols),
         "today_symbols": list(unique_symbols),
+        "today_underlying": list(today_underlying),
+        "successful_underlying": list(successful_underlying),
         "sl_hits": sl_hits,
         "loss_options": list(loss_options),
         "loss_underlying": list(loss_underlying),
@@ -494,6 +506,8 @@ def print_powerful_sl_results(
     loss_underlying: list[str] | None = None,
     open_options: list[str] | None = None,
     open_underlying: list[str] | None = None,
+    today_underlying: list[str] | None = None,
+    successful_underlying: list[str] | None = None,
 ) -> list[dict]:
     """Print intraday results with powerful 4-layer SL, strict daily cap, and accurate position sizing."""
     results = []
@@ -510,8 +524,13 @@ def print_powerful_sl_results(
     banned_exact_strikes = set(loss_options or [])
     loss_stocks = set(loss_underlying or [])
     open_opts = set(open_options or [])
+    open_stocks = set(open_underlying or [])
+    today_stocks = set(today_underlying or [])
+    successful_stocks = set(successful_underlying or [])
 
     fresh_candidates = []
+    seen_underlyings_in_candidates = set()
+
     for c in candidates:
         opt_sym = c.get("option_symbol")
         sym = c.get("symbol")
@@ -527,18 +546,31 @@ def print_powerful_sl_results(
             print(f"🛡️ SKIPPED {opt_sym}: Position currently active and open. Skipping duplicate entry.")
             continue
 
-        # 3. For stocks that hit SL earlier today, only permit re-entry with Elite Conviction (Score >= 95)
-        if sym in loss_stocks:
-            if score < 95:
-                print(f"🛡️ SKIPPED {opt_sym}: {sym} took an earlier loss today. Re-entry requires Elite Conviction (Score >= 95, current: {score}) to avoid repeat traps.")
-                continue
-            else:
-                print(f"🔥 ELITE RE-ENTRY: {opt_sym}: {sym} took an earlier loss, but re-qualifies with Elite Conviction ({score}/100) and strong momentum!")
+        # 3. Underlying-level Active Exposure Shield: Do NOT open 2 strikes on the same stock simultaneously!
+        if sym in open_stocks:
+            print(f"🛡️ SKIPPED {opt_sym}: Underlying position in {sym} is already active/OPEN. Concurrent multi-strike exposure blocked.")
+            continue
 
-        # 4. Skip contracts already logged in today's scans
+        # 4. Strict Underlying Loss Shield: If underlying hit SL earlier today, 100% ban for rest of the day!
+        if sym in loss_stocks:
+            print(f"🛡️ SKIPPED {opt_sym}: {sym} took a Stop Loss earlier today. Banned for the remainder of the day to eliminate repeat whipsaws.")
+            continue
+
+        # 5. Skip contracts already logged in today's scans
         if opt_sym in already_seen_opts:
             continue
 
+        # 6. One Trade Per Underlying Rule: If stock already traded today and didn't hit profit target, skip
+        if sym in today_stocks and sym not in successful_stocks:
+            print(f"🛡️ SKIPPED {opt_sym}: {sym} was already traded earlier today. Max 1 trade per underlying unless prior trade hit Target.")
+            continue
+
+        # 7. In-batch underlying deduplication: Only 1 strike per stock in a single scan
+        if sym in seen_underlyings_in_candidates:
+            print(f"🛡️ SKIPPED {opt_sym}: Another strike for {sym} already qualified in this scan. Multi-strike duplicate blocked.")
+            continue
+
+        seen_underlyings_in_candidates.add(sym)
         fresh_candidates.append(c)
 
     if len(fresh_candidates) < max_candidates:
@@ -548,13 +580,16 @@ def print_powerful_sl_results(
             opt_sym = c.get("option_symbol")
             sym = c.get("symbol")
             score = c.get("score", 0)
-            if opt_sym in banned_exact_strikes or opt_sym in open_opts:
+            if opt_sym in banned_exact_strikes or opt_sym in open_opts or sym in open_stocks:
                 continue
-            if sym in loss_stocks and score < 95:
+            if sym in loss_stocks:
+                continue
+            if sym in seen_underlyings_in_candidates:
                 continue
             if opt_sym not in seen_fresh:
                 fresh_candidates.append(c)
                 seen_fresh.add(opt_sym)
+                seen_underlyings_in_candidates.add(sym)
             if len(fresh_candidates) >= max_candidates:
                 break
 
@@ -579,18 +614,22 @@ def print_powerful_sl_results(
 
     sorted_candidates = sorted(fresh_candidates, key=sort_key, reverse=True)
 
-    # Sector-aware selection: allow same sector if score >= 90, otherwise diversify across sectors
+    # Sector-aware & Underlying-distinct selection: allow same sector if score >= 90, otherwise diversify across sectors
     selected = []
     seen_sectors = set()
+    seen_underlying_in_final = set()
     for c in sorted_candidates:
         sym = c.get("symbol")
         score = c.get("score", 0)
+        if sym in seen_underlying_in_final:
+            continue
         sector = get_stock_sector(sym)
         # If sector already represented in this batch, allow only if good conviction (Score >= 90)
         if sector and sector in seen_sectors and score < 90:
             print(f"ℹ️ DIVERSIFICATION: Skipping secondary {sym} (Score {score}) because sector '{sector}' already selected with higher conviction.")
             continue
         selected.append(c)
+        seen_underlying_in_final.add(sym)
         if sector:
             seen_sectors.add(sector)
         if len(selected) >= max_candidates:
@@ -630,20 +669,25 @@ def print_powerful_sl_results(
         print(f"{i}. 🎯 {contract_str} {spot_str} | Score: {c['score']}/100 [{c.get('sentiment_catalyst', 'CATALYST')}]")
         print(f"{'─' * 100}")
 
+        entry_price = float(c.get('entry_price', c.get('ltp', 0.0)))
+        sl_val = float(c.get('powerful_sl', c.get('sl', entry_price * 0.85)))
+        sl_risk_val = float(c.get('sl_risk', entry_price - sl_val))
+        sl_risk_pct_val = float(c.get('sl_risk_pct', (sl_risk_val / entry_price * 100) if entry_price > 0 else 0.0))
+
         # SL Breakdown
         print(f"\n🛡️ POWERFUL SL (Disciplined 4-Layer Protection):")
-        print(f"   Entry Price:           ₹{c['ltp']:.2f}")
+        print(f"   Entry Price:           ₹{entry_price:.2f}")
         print(f"   ├─ Layer 1 (Delta):    ₹{c.get('layer1_buffer', 0):.2f} buffer")
         print(f"   ├─ Layer 2 (Vol):      ₹{c.get('layer2_vol_buffer', 0):.2f} buffer")
         print(f"   ├─ Layer 3 (Theta):    ₹{c.get('layer3_theta_buffer', 0):.2f} buffer")
         print(f"   └─ Layer 4 (Vega):     ₹{c.get('layer4_vega_buffer', 0):.2f} buffer")
         print(f"   ────────────────────────────────────────────")
-        print(f"   💪 POWERFUL SL:        ₹{c['powerful_sl']:.2f}")
-        print(f"   Risk per share:        ₹{c['sl_risk']:.2f} ({c['sl_risk_pct']:.2f}%)")
+        print(f"   💪 POWERFUL SL:        ₹{sl_val:.2f}")
+        print(f"   Risk per share:        ₹{sl_risk_val:.2f} ({sl_risk_pct_val:.2f}%)")
 
-        old_sl = round(c['ltp'] * 0.80, 2)
-        old_risk = round(c['ltp'] - old_sl, 2)
-        improvement = ((old_risk - c['sl_risk']) / old_risk * 100) if old_risk > 0 else 0
+        old_sl = round(entry_price * 0.80, 2)
+        old_risk = round(entry_price - old_sl, 2)
+        improvement = ((old_risk - sl_risk_val) / old_risk * 100) if old_risk > 0 else 0
         print(f"   ────────────────────────────────────────────")
         print(f"   Old SL (20%):          ₹{old_sl:.2f} (Risk: ₹{old_risk:.2f})")
         print(f"   📈 Improvement:        {improvement:.1f}% tighter SL! (Disciplined noise absorption) ✅")
@@ -657,22 +701,22 @@ def print_powerful_sl_results(
         lots = c.get('recommended_qty', 1)
         lot_sz = c.get('lot_size', 1)
         tot_shares = c.get('total_shares', lots * lot_sz)
-        cap = c.get('capital_needed', tot_shares * c['ltp'])
-        m_risk = c.get('max_risk', tot_shares * c['sl_risk'])
-        t1 = c.get('t1', round(c['ltp'] * 1.12, 2))
-        t2 = c.get('t2', round(c['ltp'] * 1.20, 2))
-        p_t1 = c.get('potential_profit_t1', round(tot_shares * (t1 - c['ltp']), 2))
-        p_t2 = c.get('potential_profit_t2', round(tot_shares * (t2 - c['ltp']), 2))
+        cap = c.get('capital_needed', tot_shares * entry_price)
+        m_risk = c.get('max_risk', tot_shares * sl_risk_val)
+        t1 = c.get('t1', round(entry_price * 1.12, 2))
+        t2 = c.get('t2', round(entry_price * 1.20, 2))
+        p_t1 = c.get('potential_profit_t1', round(tot_shares * (t1 - entry_price), 2))
+        p_t2 = c.get('potential_profit_t2', round(tot_shares * (t2 - entry_price), 2))
 
-        rr_t1 = round((t1 - c['ltp']) / c['sl_risk'], 2) if c['sl_risk'] > 0 else 1.25
-        rr_t2 = round((t2 - c['ltp']) / c['sl_risk'], 2) if c['sl_risk'] > 0 else 2.0
+        rr_t1 = round((t1 - entry_price) / sl_risk_val, 2) if sl_risk_val > 0 else 1.25
+        rr_t2 = round((t2 - entry_price) / sl_risk_val, 2) if sl_risk_val > 0 else 2.0
 
         print(f"\n💰 Position Sizing (1% Risk Rule with Exchange Lots):")
         print(f"   Lots Recommended:      {lots} lots ({lot_sz} shares/lot = {tot_shares} qty)")
         print(f"   Capital Needed:        ₹{cap:,.2f}")
         print(f"   Max Risk:              ₹{m_risk:,.2f} (Within 1% account budget)")
-        print(f"   Target 1 ({rr_t1}R):         ₹{t1:.2f} (+{t1 - c['ltp']:.2f} pts) → P&L: ₹{p_t1:+,.2f} [T1 > SL ✅]")
-        print(f"   Target 2 ({rr_t2}R):         ₹{t2:.2f} (+{t2 - c['ltp']:.2f} pts) → P&L: ₹{p_t2:+,.2f} [T2 = 2× SL ✅]")
+        print(f"   Target 1 ({rr_t1}R):         ₹{t1:.2f} (+{t1 - entry_price:.2f} pts) → P&L: ₹{p_t1:+,.2f} [T1 > SL ✅]")
+        print(f"   Target 2 ({rr_t2}R):         ₹{t2:.2f} (+{t2 - entry_price:.2f} pts) → P&L: ₹{p_t2:+,.2f} [T2 = 2× SL ✅]")
         print(f"   ⚖️ Risk-to-Reward:      1 : {rr_t1} on T1 | 1 : {rr_t2} on T2 (Positive Expectancy)")
 
         # Verified Catalyst & Conviction Audit
@@ -813,8 +857,13 @@ def main():
     stats = get_today_intraday_trade_stats(Path("logs"), today_str)
 
     max_allowed_sl = args.max_sl_per_day  # Configurable circuit breaker threshold
+    now_time = datetime.now().time()
+    is_morning_session = now_time < time_type(12, 0)
+    morning_cap = 5  # Max 5 trades in morning (09:50 - 11:50) to reserve at least 5 for afternoon (12:00 - 15:00)
+
     print(f"\n📊 [DAILY TRADING DISCIPLINE STATUS]")
     print(f"   • Total Trades Initiated Today: {stats['today_trade_count']} / {args.max_daily_trades} Max Allowed")
+    print(f"   • Session Allocation:          {'Morning (09:50-11:50, Cap: 5)' if is_morning_session else 'Afternoon (12:00-14:50, Remaining Quota)'}")
     print(f"   • Stop Losses Hit Today:       {stats['sl_hits']} / {max_allowed_sl} Max Before Circuit Breaker")
 
     if not args.force:
@@ -831,13 +880,22 @@ def main():
             print(f"   Strictly skipping new trade generation (never more than {args.max_daily_trades} trades per day).\n")
             return
 
-        remaining_quota = max(0, args.max_daily_trades - stats["today_trade_count"])
+        if is_morning_session and stats["today_trade_count"] >= morning_cap:
+            print(f"\n⏸️ [SESSION PACING ACTIVE]")
+            print(f"   Morning trade quota of {morning_cap} trades reached. Preserving remaining trades for afternoon momentum (12:00 - 15:00 IST).")
+            print(f"   Scanner will resume fresh entries at 12:00 PM IST.\n")
+            return
+
+        if is_morning_session:
+            remaining_quota = max(0, morning_cap - stats["today_trade_count"])
+        else:
+            remaining_quota = max(0, args.max_daily_trades - stats["today_trade_count"])
         scan_limit = min(args.max_trades_per_scan, remaining_quota)
     else:
         print("⚡ [FORCE/AUDIT MODE] Bypassing circuit breaker and daily trade cap for testing.")
         remaining_quota = args.max_daily_trades
         scan_limit = args.max_trades_per_scan
-    print(f"   • Quota Remaining for Today:   {remaining_quota} trade(s)")
+    print(f"   • Quota Remaining for Session: {remaining_quota} trade(s)")
     print(f"   • Max New Trades This Scan:    {scan_limit} trade(s)")
 
     candidates_input = []
@@ -953,6 +1011,8 @@ def main():
         loss_underlying=stats.get("loss_underlying", []),
         open_options=stats.get("open_options", []),
         open_underlying=stats.get("open_underlying", []),
+        today_underlying=stats.get("today_underlying", []),
+        successful_underlying=stats.get("successful_underlying", []),
     )
 
     # Save execution log with an explicit signal observation time.

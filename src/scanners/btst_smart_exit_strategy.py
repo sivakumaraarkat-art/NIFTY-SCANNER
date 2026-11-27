@@ -42,6 +42,17 @@ if sys.platform == "win32":
 IST = timezone(timedelta(hours=5, minutes=30))
 DIVIDER = "──────────────────────"
 
+INDEX_MAP = {
+    "NIFTY": "NSE:NIFTY 50",
+    "NIFTY 50": "NSE:NIFTY 50",
+    "BANKNIFTY": "NSE:NIFTY BANK",
+    "NIFTY BANK": "NSE:NIFTY BANK",
+    "FINNIFTY": "NSE:NIFTY FIN SERVICE",
+    "MIDCPNIFTY": "NSE:NIFTY MID SELECT",
+    "SENSEX": "BSE:SENSEX",
+    "BSE SENSEX": "BSE:SENSEX",
+}
+
 # ──────────────────────────────────────────────────────────────
 # CREDENTIAL & KITE CONNECT RESOLVER
 # ──────────────────────────────────────────────────────────────
@@ -367,15 +378,87 @@ def run_automated_exit_monitor(dry_run: bool = False, log_dir=None, scan_date=No
     # Include every selected contract once; never substitute unrelated broker holdings.
     held = {f"{p['exchange']}:{p['tradingsymbol']}" for p in live_positions}
     remaining = [c for key, c in selected_by_id.items() if key not in held]
-    msg += f"<b>Saved batch:</b> {html.escape(batch['batch_id'])} | {batch['scan_date']}\n"
+    msg += f"<b>Saved batch:</b> {html.escape(batch['batch_id'])} | {batch['scan_date']}\n\n"
     if remaining:
-        msg += "\n<b>Selected signals without a confirmed open overnight holding:</b>\n"
+        rem_header = "📊 <b>BTST SIGNALS & EXIT PLAYBOOK (LIVE QUOTES & MTM)</b>" if not live_positions else "📋 <b>ADDITIONAL BTST BATCH SIGNALS</b>"
+        msg += f"{rem_header}\n\n"
+
+        rem_quote_keys = []
         for c in remaining:
-            opt_sym = html.escape(c["option_symbol"])
-            entry = float(c.get("entry_price", c.get("ltp", 0)))
-            status = batch.get("telegram_delivery", {}).get(contract_id(c), "unknown")
-            msg += f"• <b>{opt_sym}</b> | Scan entry ₹{entry:.2f} | Alert: {status}\n"
-        msg += "These are saved signals; no position or exit fill is assumed.\n\n"
+            opt_key = contract_id(c)
+            rem_quote_keys.append(opt_key)
+            underlying = c.get("symbol", "")
+            if underlying in INDEX_MAP:
+                rem_quote_keys.append(INDEX_MAP[underlying])
+            else:
+                rem_quote_keys.append(f"NSE:{underlying}")
+
+        rem_quotes = {}
+        if kite:
+            try:
+                rem_quotes = kite.quote(rem_quote_keys)
+            except Exception:
+                pass
+
+        for c in remaining:
+            opt_key = contract_id(c)
+            tsym = c["option_symbol"]
+            underlying = c.get("symbol", "")
+            spot_key = INDEX_MAP.get(underlying, f"NSE:{underlying}") if underlying else f"NSE:{tsym}"
+
+            opt_q = rem_quotes.get(opt_key, {})
+            spot_q = rem_quotes.get(spot_key, {})
+
+            entry_price = float(c.get("entry_price", c.get("ltp", 0.0)))
+            lots = int(c.get("recommended_qty", 1))
+            lot_sz = int(c.get("lot_size", 1))
+            tot_shares = int(c.get("total_shares", lots * lot_sz))
+
+            opt_ltp = opt_q.get("last_price")
+            if opt_ltp is None or opt_ltp <= 0.05:
+                opt_ltp = float(opt_q.get("ohlc", {}).get("close", 0.0))
+            if opt_ltp <= 0.05:
+                opt_ltp = entry_price
+
+            opt_high = float(opt_q.get("ohlc", {}).get("high", opt_ltp))
+            opt_low = float(opt_q.get("ohlc", {}).get("low", opt_ltp))
+            spot_ltp = float(spot_q.get("last_price", 0.0))
+
+            powerful_sl = float(c.get("powerful_sl", c.get("sl", entry_price * 0.85)))
+            t1 = float(c.get("t1", entry_price * 1.25))
+            t2 = float(c.get("t2", entry_price * 1.50))
+
+            pnl_amt = (opt_ltp - entry_price) * tot_shares
+            pnl_pct = ((opt_ltp - entry_price) / entry_price * 100) if entry_price > 0 else 0.0
+            pnl_icon = "🟢" if pnl_amt >= 0 else "🔴"
+            opt_type_icon = "📈" if ("CE" in tsym or c.get("option_type") == "CE") else "📉"
+
+            manager = BTSTExitManager(entry_price, tot_shares, powerful_sl)
+            condition = manager.detect_market_condition(opt_ltp)
+            exit_plan = manager.calculate_exit_price(opt_ltp, condition)
+
+            if opt_high >= t1 or opt_ltp >= t1:
+                action_status = f"🎯 <b>TARGET 1 HIT ({t1:.2f})!</b> Lock 50% profit &amp; trail SL to Cost"
+            elif opt_low > 0 and opt_low <= powerful_sl:
+                action_status = f"🛑 <b>SL HIT ({powerful_sl:.2f})!</b> Protect capital immediately"
+            else:
+                action_status = exit_plan["recommendation"]
+
+            msg += f"{opt_type_icon} <b>{html.escape(tsym)}</b>\n"
+            msg += f"• <b>Signal Sizing:</b> <code>{tot_shares} units ({lots} lot{'s' if lots > 1 else ''})</code>\n"
+            msg += f"• <b>Scan Entry:</b> <code>₹{entry_price:.2f}</code>\n"
+            if opt_ltp > 0:
+                msg += f"• <b>Live Option LTP:</b> <code>₹{opt_ltp:.2f}</code> (Range: {opt_low:.2f} - {opt_high:.2f})\n"
+            if spot_ltp > 0:
+                msg += f"• <b>Underlying ({underlying}) Spot:</b> <code>₹{spot_ltp:.2f}</code>\n"
+            msg += f"• <b>Signal MTM:</b> {pnl_icon} <b>₹{pnl_amt:+,.2f}</b> (<code>{pnl_pct:+.2f}%</code>)\n\n"
+
+            msg += f"🎯 <b>BTST EXECUTION MATRIX:</b>\n"
+            msg += f"   🚀 <b>Target 1 (+25%):</b> <code>₹{t1:.2f}</code>\n"
+            msg += f"   🌟 <b>Target 2 (+50%):</b> <code>₹{t2:.2f}</code>\n"
+            msg += f"   🛡️ <b>Powerful SL:</b> <code>₹{powerful_sl:.2f}</code>\n"
+            msg += f"   💡 <b>Action:</b> <i>{action_status}</i>\n\n"
+            msg += f"{DIVIDER}\n\n"
 
     msg += "⚠️ <b>DISCIPLINE NOTE:</b> Do not hold stock options through afternoon theta decay if spot momentum stalls. Lock gains at T1 or trail to cost."
 

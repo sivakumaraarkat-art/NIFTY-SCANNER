@@ -432,6 +432,7 @@ def resolve_option_candidate(
     account_size: float = 500000.0,
     sentiment_score: int = 70,
     meta: Optional[Dict[str, Any]] = None,
+    min_dte: int = 0,
 ) -> Optional[Dict[str, Any]]:
     opt_type = "PE" if "BEARISH" in sentiment.upper() else "CE"
     symbol = symbol.strip().upper()
@@ -502,9 +503,13 @@ def resolve_option_candidate(
         if sym_opts:
             expiries = sorted(list(set(i["expiry"] for i in sym_opts)))
             if is_btst:
-                # BTST is an overnight hold: NEVER pick a contract expiring today!
-                valid_expiries = [e for e in expiries if (e - today).days >= 1]
-                nearest_exp = valid_expiries[0] if valid_expiries else expiries[0]
+                # Indices (NIFTY, SENSEX, etc.) have liquid weekly expiries; exempt from 20 DTE minimum
+                is_index_symbol = symbol in INDEX_MAP
+                btst_min_dte = 1 if is_index_symbol else (max(1, min_dte) if min_dte > 0 else 20)
+                valid_expiries = [e for e in expiries if (e - today).days >= btst_min_dte]
+                if not valid_expiries:
+                    return None  # No expiry meets minimum DTE requirement for BTST
+                nearest_exp = valid_expiries[0]
             else:
                 nearest_exp = expiries[0]
             t_days = max(1, (nearest_exp - today).days)
@@ -569,25 +574,26 @@ def resolve_option_candidate(
         )
         return None
 
-    # Quality Shield 1: Skip penny / micro-cap underlying stocks (< ₹60)
-    # Allows Tata Steel (~150), SAIL (~160), BEL, PNB, Coal India, RVNL while rejecting sub-₹50 like Sagility
-    if not is_index and not is_crude and spot_price < 60.0:
+    # Quality Shield 1: Skip penny / micro-cap underlying stocks (< ₹60 intraday, < ₹80 BTST)
+    # Allows Tata Steel (~150), SAIL (~160), BEL, PNB, Coal India, RVNL while rejecting sub-₹50/80 low-priced tickers for BTST
+    min_spot = 80.0 if is_btst else 60.0
+    if not is_index and not is_crude and spot_price < min_spot:
         print(
-            f"⚠️ SKIPPED: {symbol} spot price too low (₹{spot_price:.2f} < ₹60.00). High volatility/trap risk."
+            f"⚠️ SKIPPED: {symbol} spot price too low (₹{spot_price:.2f} < ₹{min_spot:.2f}). High volatility/trap risk."
         )
         return None
 
     # Quality Shield 2: Smart Option Premium Threshold based on Lot Size & Strategy
     # For High-Lot Size stocks (1500, 2500, 3000, 4000 shares like SAIL, Tata Steel, RVNL, National Aluminium):
     # Intraday: Allow ₹1.80 if strong conviction (Score >= 85)
-    # BTST: Higher floor (₹2.50-₹3.00 if high-lot + high-score) due to overnight theta risk
-    # For standard lot sizes (< 1500 shares): minimum premium ₹3.50 (intraday), ₹4.50 (BTST, or ₹3.50 near expiry)
+    # BTST: Higher floor (₹3.50-₹5.00) due to overnight theta risk & morning spreads
+    # For standard lot sizes (< 1500 shares): minimum premium ₹3.50 (intraday), ₹5.00 (BTST, or ₹4.00 near expiry)
     if is_btst:
         is_expiry_week = t_days <= 3
         if is_expiry_week:
-            min_premium = 2.00 if (lot_size >= 1500 and sentiment_score >= 85) else 3.50
+            min_premium = 2.50 if (lot_size >= 1500 and sentiment_score >= 85) else 4.00
         else:
-            min_premium = 2.80 if (lot_size >= 1500 and sentiment_score >= 85) else 4.20
+            min_premium = 3.50 if (lot_size >= 1500 and sentiment_score >= 85) else 5.00
     else:
         min_premium = 1.80 if (lot_size >= 1500 and sentiment_score >= 85) else 3.50
 
@@ -598,20 +604,21 @@ def resolve_option_candidate(
         return None
 
     # Quality Shield 3: Tight Liquidity Spread Shield
-    # Intraday: Max 2.5% | BTST: Max 3.5% (protects stop loss from being eaten by bid-ask slippage)
-    max_spread = 3.5 if is_btst else 2.5
+    # Intraday: Max 2.5% | BTST: Max 2.8% (protects stop loss from being eaten by bid-ask slippage)
+    max_spread = 2.8 if is_btst else 2.5
     if spread_pct > max_spread:
         print(
             f"⚠️ SKIPPED: {symbol} {tradingsymbol} bid-ask spread too wide ({spread_pct:.1f}% > {max_spread:.1f}%). Slippage risk."
         )
         return None
 
-    # Quality Shield 4: Active Contract Volume Shield (minimum 200 contracts traded today)
+    # Quality Shield 4: Active Contract Volume Shield (minimum 200 contracts for intraday, 300 for BTST)
     # Apply to BOTH Intraday and BTST — illiquid contracts are dangerous overnight too
+    min_vol = 300 if is_btst else 200
     opt_vol = int(q_info.get("volume", 0)) if isinstance(locals().get("q_info"), dict) else 0
-    if not is_crude and opt_vol < 200:
+    if not is_crude and opt_vol < min_vol:
         print(
-            f"⚠️ SKIPPED: {symbol} {tradingsymbol} contract volume too low ({opt_vol} contracts < 200). Illiquid contract."
+            f"⚠️ SKIPPED: {symbol} {tradingsymbol} contract volume too low ({opt_vol} contracts < {min_vol}). Illiquid contract."
         )
         return None
 
@@ -784,6 +791,7 @@ def resolve_all_candidates(
     include_nifty: bool = False,
     account_size: float = 500000.0,
     min_score: int = 50,
+    min_dte: int = 0,
 ) -> List[Dict[str, Any]]:
     kite = get_kite_client()
     nfo_instruments = get_nfo_instruments(kite)
@@ -811,7 +819,7 @@ def resolve_all_candidates(
                         break
 
             res = resolve_option_candidate(
-                kite, nfo_instruments, idx, idx_sentiment, is_btst=True, account_size=account_size, sentiment_score=idx_score
+                kite, nfo_instruments, idx, idx_sentiment, is_btst=True, account_size=account_size, sentiment_score=idx_score, min_dte=min_dte
             )
             if res and res["score"] >= min_score:
                 results.append(res)
@@ -836,7 +844,7 @@ def resolve_all_candidates(
             time.sleep(0.35)
 
         cand = resolve_option_candidate(
-            kite, nfo_instruments, sym, sent, is_btst=is_btst, account_size=account_size, sentiment_score=score, meta=meta
+            kite, nfo_instruments, sym, sent, is_btst=is_btst, account_size=account_size, sentiment_score=score, meta=meta, min_dte=min_dte
         )
         if cand and cand["score"] >= min_score:
             results.append(cand)

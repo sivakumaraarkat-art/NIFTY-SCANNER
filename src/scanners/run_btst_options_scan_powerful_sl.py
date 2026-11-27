@@ -244,11 +244,11 @@ def get_live_market_movers(kite, nfo_instruments, top_n=8) -> list:
             high = ohlc.get("high", 0.0)
             low = ohlc.get("low", 0.0)
             vol = q.get("volume", 0)
-            if prev_close <= 0 or ltp < 60:
+            if prev_close <= 0 or ltp < 80:
                 continue
 
-            # Quality Shield: Minimum volume for reliable options
-            if vol < 100000:
+            # Quality Shield: Minimum volume for reliable options (at least 200k for overnight BTST)
+            if vol < 200000:
                 continue
 
             # Quality Shield: Bid-ask spread check (via depth)
@@ -261,7 +261,7 @@ def get_live_market_movers(kite, nfo_instruments, top_n=8) -> list:
                 ask = sell_orders[0]["price"]
                 if ltp > 0:
                     spread_pct = ((ask - bid) / ltp) * 100
-            if spread_pct > 7.0:
+            if spread_pct > 3.0:
                 continue
 
             pct = ((ltp - prev_close) / prev_close) * 100
@@ -502,6 +502,7 @@ def main():
         include_nifty=args.include_nifty,
         account_size=args.account_size,
         min_score=args.min_score,
+        min_dte=20,
     )
 
     # Filter candidates by theta decay limit for BTST
@@ -523,6 +524,7 @@ def main():
             include_nifty=args.include_nifty,
             account_size=args.account_size,
             min_score=max(75, args.min_score - 10),
+            min_dte=20,
         )
         existing_keys = {c.get("option_symbol") for c in stock_candidates + index_candidates}
         for c in fallback_resolved:
