@@ -127,17 +127,17 @@ def evaluate_btst_performance(log_dir=None, scan_date=None, *, offline=False, at
         t2 = float(c.get("t2", entry * 1.50))
         sl = float(c.get("powerful_sl", c.get("sl", entry * 0.85)))
 
-        if high >= t2:
+        pct_move = ((current - entry) / entry * 100) if (current is not None and entry > 0) else 0.0
+        if current is not None and current <= sl:
+            outcome = "SL HIT 🛑 (-15%)"
+            outcome_price = sl
+        elif high >= t2:
             outcome = "TARGET 2 HIT 🎯🎯 (+50%)"
             outcome_price = t2
         elif high >= t1:
             outcome = "TARGET 1 HIT 🎯 (+25%)"
             outcome_price = t1
-        elif low > 0 and low <= sl:
-            outcome = "SL HIT 🛑 (-15%)"
-            outcome_price = sl
         elif current is not None:
-            pct_move = ((current - entry) / entry * 100) if entry > 0 else 0.0
             outcome = f"OPEN / MTM ({pct_move:+.1f}%)"
             outcome_price = current
         else:
