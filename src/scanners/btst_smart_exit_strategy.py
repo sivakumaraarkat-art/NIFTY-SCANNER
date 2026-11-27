@@ -437,10 +437,15 @@ def run_automated_exit_monitor(dry_run: bool = False, log_dir=None, scan_date=No
             condition = manager.detect_market_condition(opt_ltp)
             exit_plan = manager.calculate_exit_price(opt_ltp, condition)
 
-            if opt_high >= t1 or opt_ltp >= t1:
+            now_time = now_ist.time()
+            is_market_live = time_type(9, 15) <= now_time <= time_type(15, 30)
+
+            if opt_ltp >= t2 or (is_market_live and opt_high >= t2):
+                action_status = f"🎯🎯 <b>TARGET 2 HIT ({t2:.2f})!</b> Full target reached! Lock 100% gains"
+            elif opt_ltp >= t1 or (is_market_live and opt_high >= t1):
                 action_status = f"🎯 <b>TARGET 1 HIT ({t1:.2f})!</b> Lock 50% profit &amp; trail SL to Cost"
-            elif opt_low > 0 and opt_low <= powerful_sl:
-                action_status = f"🛑 <b>SL HIT ({powerful_sl:.2f})!</b> Protect capital immediately"
+            elif opt_ltp <= powerful_sl:
+                action_status = f"🛑 <b>SL BREACHED ({powerful_sl:.2f})!</b> Exit to protect capital"
             else:
                 action_status = exit_plan["recommendation"]
 
