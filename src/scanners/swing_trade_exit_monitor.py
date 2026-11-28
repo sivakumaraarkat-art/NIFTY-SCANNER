@@ -46,11 +46,15 @@ from trade_selection.active_swing_trade_registry import (
     load_active_trades,
     save_active_trades,
     close_swing_trade,
+    partial_close_swing_trade,
     calculate_trading_days_elapsed,
 )
 from news_analysis.company_news_analyzer import fetch_company_news
 from news_analysis.negative_event_detector import has_critical_crash_risk
-from telegram_alerts.swing_trade_alert_sender import send_swing_exit_alert
+from telegram_alerts.swing_trade_alert_sender import (
+    send_swing_exit_alert,
+    send_swing_partial_exit_alert,
+)
 
 DIVIDER = "──────────────────────────────────────────────"
 
@@ -127,14 +131,22 @@ def evaluate_swing_exit(
         return True, t2, "TARGET 2 HIT (+10%+) 🎯"
 
     # 3. Target 1 Hit (Core Target: +5.5%+)
-    # On entry day (Day 0), compare against current LTP. On subsequent holding days, check session high.
-    if ltp >= t1 or (elapsed_trading_days > 0 and high >= t1):
-        return True, t1, "TARGET 1 HIT (+5.5%+) 🎯"
+    # Only evaluates if Target 1 has not already been partially booked
+    t1_already_booked = trade.get("t1_booked", False)
+    if not t1_already_booked:
+        if ltp >= t1 or (elapsed_trading_days > 0 and high >= t1):
+            return True, t1, "TARGET 1 HIT (+5.5%+) 🎯"
 
-    # 4. Stop Loss Hit (Capital Protection)
-    # On entry day (Day 0), check current LTP. On subsequent holding days, check session low.
-    if ltp <= sl or (elapsed_trading_days > 0 and low > 0 and low <= sl):
-        return True, sl, "STOP LOSS TRIGGERED 🛑"
+    # 4. Stop Loss Hit (P0: Whipsaw-Safe Capital Protection)
+    # A true stop-loss requires current price (LTP) to be at or below SL.
+    # An intraday wick low that recovers to ltp > sl by session check is a bear trap / rebound.
+    # We trigger stop loss if current LTP <= sl, OR if low <= sl and price failed to recover above SL + 1.0%.
+    if ltp <= sl:
+        reason = "BREAK-EVEN STOP LOSS (+0.5%) 🛡️" if t1_already_booked else "STOP LOSS TRIGGERED 🛑"
+        return True, sl, reason
+    elif elapsed_trading_days > 0 and low > 0 and low <= sl and ltp <= (sl * 1.01):
+        reason = "BREAK-EVEN STOP LOSS (+0.5%) 🛡️" if t1_already_booked else "STOP LOSS TRIGGERED 🛑"
+        return True, sl, reason
 
     # 5. 10-Day Time Horizon Reached
     if elapsed_trading_days >= max_days:
@@ -205,6 +217,36 @@ def monitor_active_swing_trades(kite_client=None, send_telegram: bool = True) ->
         should_exit, exit_price, exit_reason = evaluate_swing_exit(trade, q)
 
         if should_exit:
+            # P0: Partial Profit Booking (50% @ T1) + Trail SL to Break-Even (+0.5%)
+            if "TARGET 1" in exit_reason and not trade.get("t1_booked", False):
+                qty = int(trade.get("quantity", 1))
+                if qty > 1:
+                    closed_qty = qty // 2
+                    print(f"🎯 PARTIAL EXIT (50%) TRIGGERED for {symbol}: Booking {closed_qty}/{qty} shares @ ₹{exit_price:,.2f} ({unrealized_pct:+.2f}%) & Trailing SL to Break-Even!")
+                    closed_part, updated_trade = partial_close_swing_trade(
+                        trade_id=trade_id,
+                        exit_price=exit_price,
+                        exit_reason="TARGET 1 PARTIAL HIT (50% BOOKED @ +5.5%+) 🎯",
+                        closed_qty=closed_qty,
+                        new_stop_loss=round(entry_price * 1.005, 2),
+                    )
+                    if closed_part:
+                        exited_trades.append(closed_part)
+                        if send_telegram:
+                            send_swing_partial_exit_alert(closed_part, updated_trade, settings)
+                    if updated_trade:
+                        updated_active.append(updated_trade)
+                    continue
+                else:
+                    # Single share trade: Trail SL to Break-Even and hold for Target 2!
+                    print(f"🎯 TARGET 1 HIT for {symbol} (1 share): Trailing SL to Break-Even (₹{entry_price * 1.005:.2f}) & Holding for Target 2!")
+                    trade["t1_booked"] = True
+                    trade["status"] = "RUNNER_ACTIVE"
+                    trade["stop_loss"] = round(entry_price * 1.005, 2)
+                    trade["stop_loss_pct"] = +0.50
+                    updated_active.append(trade)
+                    continue
+
             print(f"🚨 EXIT TRIGGERED for {symbol}: {exit_reason} @ ₹{exit_price:,.2f} ({unrealized_pct:+.2f}%)")
             closed = close_swing_trade(
                 trade_id=trade_id,

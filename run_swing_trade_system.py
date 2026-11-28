@@ -77,6 +77,25 @@ def main():
     print("[2/9] Zerodha connection verified.")
 
     # ------------------------------------------------------------------
+    # STAGE 2.5: MARKET REGIME AUDIT (P1: NIFTY 50 Trend Alignment)
+    # ------------------------------------------------------------------
+    try:
+        nifty_quote = client.quote(["NSE:NIFTY 50"]).get("NSE:NIFTY 50", {})
+        n_ltp = float(nifty_quote.get("last_price", 0.0))
+        n_pc = float(nifty_quote.get("ohlc", {}).get("close", 0.0))
+        n_open = float(nifty_quote.get("ohlc", {}).get("open", 0.0))
+        if n_pc > 0:
+            n_pct = ((n_ltp - n_pc) / n_pc) * 100
+            regime = "BULLISH 🚀" if (n_pct >= 0.25 and n_ltp >= n_open) else ("BEARISH ⚠️" if (n_pct <= -0.40 or n_ltp < n_open) else "CHOPPY / NEUTRAL ⚖️")
+            print(f"[2.5/9] Market Regime: NIFTY 50 is {regime} ({n_pct:+.2f}%).")
+            if "BEARISH" in regime:
+                orig_score = settings.minimum_candidate_score
+                settings.minimum_candidate_score = max(orig_score, 88)
+                print(f"       🛡️ Regime Guard: NIFTY in correction. Tightening swing qualification score ({orig_score} ➔ {settings.minimum_candidate_score}) to filter out correlated drawdowns.")
+    except Exception as exc:
+        print(f"[2.5/9] Market regime check notice: {exc}")
+
+    # ------------------------------------------------------------------
     # STAGE 3: UNIVERSE DISCOVERY (Full NSE Equity)
     # ------------------------------------------------------------------
     universe = load_nse_equity_universe(client, settings)
@@ -214,7 +233,23 @@ def main():
             for sym, rsn in rejected_risks:
                 print(f"         - ❌ {sym}: {rsn}")
 
-        ranked = safe_ranked
+        # P1: Sector Concentration Cap (Max 2 stocks per sector group)
+        from src.scanners.run_options_intraday_scan_powerful_sl import get_stock_sector
+        sector_counts = {}
+        diversified_ranked = []
+        for cand in safe_ranked:
+            sym = cand.get("symbol", "")
+            sec = get_stock_sector(sym)
+            if sec and sector_counts.get(sec, 0) >= 2:
+                print(f"      🛡️ Sector Concentration Cap: Skipping {sym} (Sector '{sec}' already has 2 candidates in this batch).")
+                continue
+            diversified_ranked.append(cand)
+            if sec:
+                sector_counts[sec] = sector_counts.get(sec, 0) + 1
+
+        if len(diversified_ranked) < len(safe_ranked):
+            print(f"      🛡️ Sector Cap: Filtered from {len(safe_ranked)} down to {len(diversified_ranked)} well-diversified candidates.")
+        ranked = diversified_ranked
 
     # ------------------------------------------------------------------
     # STAGE 9: NOTIFICATIONS & ACTIVE 10-DAY SWING REGISTRY

@@ -252,3 +252,93 @@ def close_swing_trade(
     save_closed_trades(closed_trades)
 
     return closed_record
+
+
+def partial_close_swing_trade(
+    trade_id: str,
+    exit_price: float,
+    exit_reason: str,
+    closed_qty: int,
+    new_stop_loss: Optional[float] = None,
+    exit_date: Optional[str] = None,
+    exit_time: Optional[str] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Partially close an active swing trade (P0: Book 50% at Target 1 & Trail SL to Break-Even):
+    1. Records a closed trade record for the 50% tranche with exact return % and realized P&L.
+    2. Updates the remaining active position: reduces quantity, updates capital,
+       moves Stop Loss to Break-Even (entry_price * 1.005) to ensure a 100% risk-free ride to Target 2!
+    Returns: (closed_record, updated_active_trade)
+    """
+    active_trades = load_active_trades()
+    target_trade = None
+    remaining_active = []
+
+    for t in active_trades:
+        if t.get("trade_id") == trade_id:
+            target_trade = t
+        else:
+            remaining_active.append(t)
+
+    if not target_trade:
+        return None, None
+
+    total_qty = int(target_trade.get("quantity", 1))
+    if closed_qty >= total_qty or closed_qty <= 0:
+        # Full exit fallback
+        full_closed = close_swing_trade(trade_id, exit_price, exit_reason, exit_date, exit_time)
+        return full_closed, None
+
+    now = datetime.now()
+    exit_date_str = exit_date or now.strftime("%Y-%m-%d")
+    exit_time_str = exit_time or now.strftime("%H:%M:%S")
+    entry_price = float(target_trade.get("entry_price", exit_price))
+
+    # 1. Closed 50% tranche record
+    closed_capital = round(closed_qty * entry_price, 2)
+    pnl_amount = round((exit_price - entry_price) * closed_qty, 2)
+    return_pct = round(((exit_price - entry_price) / entry_price) * 100, 2) if entry_price > 0 else 0.0
+    holding_days = calculate_trading_days_elapsed(target_trade.get("entry_date", exit_date_str), now)
+
+    closed_record = dict(target_trade)
+    closed_record.update({
+        "status": "CLOSED",
+        "trade_id": f"{trade_id}_T1",
+        "quantity": closed_qty,
+        "capital_allocated": closed_capital,
+        "exit_price": round(exit_price, 2),
+        "exit_date": exit_date_str,
+        "exit_time": exit_time_str,
+        "exit_reason": exit_reason,
+        "holding_days": holding_days,
+        "return_pct": return_pct,
+        "pnl_amount": pnl_amount,
+    })
+
+    # Save closed tranche to closed trades
+    closed_trades = load_closed_trades()
+    closed_trades.append(closed_record)
+    save_closed_trades(closed_trades)
+
+    # 2. Update remaining active trade with break-even stop loss
+    remaining_qty = total_qty - closed_qty
+    remaining_capital = round(remaining_qty * entry_price, 2)
+    sl = new_stop_loss if new_stop_loss is not None else round(entry_price * 1.005, 2)
+
+    updated_trade = dict(target_trade)
+    updated_trade.update({
+        "quantity": remaining_qty,
+        "capital_allocated": remaining_capital,
+        "t1_booked": True,
+        "t1_exit_price": round(exit_price, 2),
+        "t1_hit_date": exit_date_str,
+        "stop_loss": round(sl, 2),
+        "stop_loss_pct": round(((sl - entry_price) / entry_price) * 100, 2),
+        "status": "RUNNER_ACTIVE",
+        "last_ltp": round(exit_price, 2),
+    })
+
+    remaining_active.append(updated_trade)
+    save_active_trades(remaining_active)
+
+    return closed_record, updated_trade

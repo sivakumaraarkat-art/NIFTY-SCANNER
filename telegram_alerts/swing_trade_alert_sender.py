@@ -167,7 +167,7 @@ def send_swing_alerts(candidates: list[dict], settings) -> None:
     if not settings.signal_only:
         raise RuntimeError("Safety stop: SIGNAL_ONLY must remain true.")
 
-    # 1. Send Header Message
+    # 1. Send Header Message with Monospace Quick Table
     header_lines = [
         "🎯 <b>STOCK SWING V1 & CRUDE SIGNALS</b>",
         f"{DIVIDER}",
@@ -179,6 +179,12 @@ def send_swing_alerts(candidates: list[dict], settings) -> None:
     if fii_dii_text:
         header_lines.append(fii_dii_text.strip())
         header_lines.append(f"{DIVIDER}")
+
+    # Monospace Table Grid for Instant Mobile Glance
+    header_lines.append("📊 <b>QUICK EXECUTION MATRIX:</b>")
+    header_lines.append(_format_swing_table(formatted_candidates[:5]))
+    header_lines.append(f"{DIVIDER}")
+    header_lines.append("<i>Top swing breakouts with 50% T1 Partial Exit & Trailing Stop:</i>")
 
     _post_telegram_message(
         bot_token, chat_id, "\n".join(header_lines)
@@ -200,22 +206,31 @@ def send_swing_alerts(candidates: list[dict], settings) -> None:
         icon = "🛢️ 🟢" if is_crude else f"🟢"
 
         conviction_label = "🔥 HIGH CONVICTION" if c.get("score", 0) >= 85 else "🟢 SOLID CONVICTION"
+        score_val = int(c.get("score", 80))
+        score_bar = _make_progress_bar(score_val, 100.0)
+
+        # Risk-to-Reward calculation
+        rr_t1 = round(t1_pct / risk_pct, 2) if risk_pct > 0 else 1.5
+        rr_t2 = round(t2_pct / risk_pct, 2) if risk_pct > 0 else 2.5
+        rr_t3 = round(t3_pct / risk_pct, 2) if risk_pct > 0 else 4.0
 
         card_lines = [
             f"{icon} <b>#{i} BUY {sym_esc}</b>",
             f"{DIVIDER}",
-            f"🏷️ <b>Setup:</b>      <code>{setup_esc}</code>",
-            f"⭐ <b>Conviction:</b> <b>{conviction_label}</b> ({c['score']}/100)",
-            f"🏢 <b>Segment:</b>    <code>{cap_seg}</code>",
+            f"🏷️ <b>Setup:</b>        <code>{setup_esc}</code>",
+            f"⭐ <b>Conviction:</b>   <b>{conviction_label}</b> ({score_val}/100)",
+            f"📈 <b>Score Meter:</b>  {score_bar}",
+            f"🏢 <b>Segment:</b>      <code>{cap_seg}</code>",
             "",
-            "💰 <b>TARGETS BY TIMEFRAME</b>",
+            "💰 <b>TARGETS & RISK REWARD LEVELS</b>",
             f"├─ 🟢 <b>Buy Entry:</b>             <code>₹{c['entry']:,.2f}</code>",
             f"├─ 🛑 <b>Stop Loss:</b>              <code>₹{c['stop_loss']:,.2f}</code> (<b>-{risk_pct:.1f}%</b>)",
-            f"├─ 🥇 <b>1-Week Target (5d):</b>    <code>₹{c['target_1']:,.2f}</code> (<b>+{t1_pct:.1f}%</b>)",
-            f"├─ 🥈 <b>10-Day Target (10d):</b>   <code>₹{c['target_2']:,.2f}</code> (<b>+{t2_pct:.1f}%</b>)",
-            f"└─ 🥉 <b>1-Month Target (20d):</b>  <code>₹{c['target_3']:,.2f}</code> (<b>+{t3_pct:.1f}%</b>)",
+            f"├─ 🥇 <b>1-Week Target (5d):</b>    <code>₹{c['target_1']:,.2f}</code> (<b>+{t1_pct:.1f}% / {rr_t1}R</b>)",
+            f"├─ 🥈 <b>10-Day Target (10d):</b>   <code>₹{c['target_2']:,.2f}</code> (<b>+{t2_pct:.1f}% / {rr_t2}R</b>)",
+            f"└─ 🥉 <b>1-Month Target (20d):</b>  <code>₹{c['target_3']:,.2f}</code> (<b>+{t3_pct:.1f}% / {rr_t3}R</b>)",
             "",
-            "⏱️ <b>Strategy:</b> <code>Book 50% at 1-Week Target, hold balance for 10-Day/1-Month target</code>",
+            f"📦 <b>Sizing:</b> <code>{c.get('quantity', 1)} shares</code> | 💵 <b>Capital:</b> <code>₹{c.get('capital_required', c['entry']):,.2f}</code>",
+            "⏱️ <b>Strategy:</b> <code>P0: Book 50% @ T1, Trail SL to Break-Even (+0.5%) for Target 2 Runner!</code>",
         ]
 
         # Institutional Flow
@@ -272,9 +287,39 @@ def send_swing_alerts(candidates: list[dict], settings) -> None:
         time.sleep(0.3)
 
 
+def _format_swing_table(candidates: list[dict]) -> str:
+    """
+    Format top candidates into a clean, monospace table for Telegram HTML pre block.
+    """
+    lines = [
+        "┌─ Stock ────┬── Entry ──┬─ T1 (+6%) ┬── Stop ──┐"
+    ]
+    for i, c in enumerate(candidates[:5], 1):
+        sym = str(c.get("symbol", ""))[:8]
+        entry = float(c.get("entry", 0.0))
+        t1 = float(c.get("target_1", 0.0))
+        sl = float(c.get("stop_loss", 0.0))
+        lines.append(f"│ #{i} {sym:<6} │ ₹{entry:>7,.1f} │ ₹{t1:>7,.1f} │ ₹{sl:>6,.1f} │")
+    lines.append("└────────────┴───────────┴───────────┴──────────┘")
+    return "<pre>" + "\n".join(lines) + "</pre>"
+
+
+def _make_progress_bar(pct: float, max_pct: float = 15.0) -> str:
+    """Generate a clean visual block progress meter for Telegram cards."""
+    normalized = min(1.0, max(0.0, pct / max_pct))
+    blocks = int(round(normalized * 8))
+    return "🟩" * blocks + "⬜" * (8 - blocks)
+
+
+def _make_win_rate_bar(wr: float) -> str:
+    """Generate a visual win-rate meter."""
+    blocks = int(round((min(100.0, max(0.0, wr)) / 100.0) * 10))
+    return "🟩" * blocks + "🟥" * (10 - blocks)
+
+
 def send_swing_exit_alert(closed_trade: dict, settings=None) -> bool:
     """
-    Format and send a structured Telegram SELL / Exit alert with exact % return.
+    Format and send a structured Telegram GUI SELL / Exit alert with visual graphics.
     """
     bot_token, chat_id = resolve_telegram_credentials(settings)
 
@@ -292,23 +337,25 @@ def send_swing_exit_alert(closed_trade: dict, settings=None) -> bool:
 
     ret_icon = "🟢" if ret_pct >= 0 else "🛑"
     pnl_sign = "+" if pnl_amt >= 0 else ""
+    p_bar = _make_progress_bar(ret_pct, 15.0) if ret_pct > 0 else "🟥" * 4 + "⬜" * 4
 
     lines = [
-        "🔔 <b>SWING TRADE EXIT / SELL ALERT</b>",
+        f"🔔 <b>SWING TRADE EXIT / SELL ALERT</b> {ret_icon}",
         f"{DIVIDER}",
-        f"🏷️ <b>Stock:</b>    <code>{sym}</code>",
-        f"📋 <b>Setup:</b>    <code>{setup}</code>",
-        f"⏱️ <b>Holding:</b>  <code>{days} Days ({entry_d} ➔ {exit_d})</code>",
+        f"🏷️ <b>Stock:</b>      <code>{sym}</code>",
+        f"📋 <b>Setup:</b>      <code>{setup}</code>",
+        f"⏱️ <b>Holding:</b>    <code>{days} Days ({entry_d} ➔ {exit_d})</code>",
         "",
         "📊 <b>EXIT & RETURN BREAKDOWN</b>",
         f"├─ 🟢 <b>Buy Entry:</b>    <code>₹{entry:,.2f}</code>",
         f"├─ 🔴 <b>Sell Exit:</b>    <code>₹{exit_p:,.2f}</code>",
         f"├─ 🎯 <b>Exit Reason:</b>  <b>{reason}</b>",
-        f"└─ {ret_icon} <b>Net Return:</b>   <b>{ret_pct:+.2f}% {ret_icon}</b>",
+        f"├─ 📈 <b>Progress:</b>     {p_bar}",
+        f"└─ {ret_icon} <b>Net Return:</b>   <b>{ret_pct:+.2f}%</b>",
         "",
-        f"💵 <b>Realized P&L:</b> <code>{pnl_sign}₹{pnl_amt:,.2f}</code> (Qty: {qty})",
+        f"💵 <b>Realized P&L:</b> <code>{pnl_sign}₹{pnl_amt:,.2f}</code> (Qty: {qty} shares)",
         f"{DIVIDER}",
-        "✅ <i>Managed by Stock Swing V1 Engine.</i>",
+        "✅ <i>Stock Swing V1 Autonomous Risk-Managed Engine</i>",
     ]
 
     message_text = "\n".join(lines)
@@ -323,9 +370,57 @@ def send_swing_exit_alert(closed_trade: dict, settings=None) -> bool:
     return _post_telegram_message(bot_token, chat_id, message_text)
 
 
+def send_swing_partial_exit_alert(closed_part: dict, remaining_trade: dict, settings=None) -> bool:
+    """
+    Format and send a structured Telegram GUI Partial Exit alert (P0: 50% Booked at T1 & SL Trailed to Break-Even).
+    """
+    bot_token, chat_id = resolve_telegram_credentials(settings)
+
+    sym = html.escape(str(closed_part.get("symbol", "")))
+    entry = float(closed_part.get("entry_price", 0.0))
+    exit_p = float(closed_part.get("exit_price", 0.0))
+    ret_pct = float(closed_part.get("return_pct", 0.0))
+    pnl_amt = float(closed_part.get("pnl_amount", 0.0))
+    closed_qty = int(closed_part.get("quantity", 1))
+    remaining_qty = int(remaining_trade.get("quantity", 0))
+    new_sl = float(remaining_trade.get("stop_loss", entry * 1.005))
+    t2 = float(remaining_trade.get("target_2", entry * 1.10))
+    t2_pct = round(((t2 - entry) / entry) * 100, 1)
+
+    p_bar = _make_progress_bar(ret_pct, 12.0)
+
+    lines = [
+        "🎯 <b>SWING TARGET 1 HIT — 50% PROFIT BOOKED</b> 🟢",
+        f"{DIVIDER}",
+        f"🏷️ <b>Stock:</b>          <code>{sym}</code>",
+        f"💵 <b>T1 Exit Price:</b>  <code>₹{exit_p:,.2f}</code> (<b>{ret_pct:+.2f}% 🟢</b>)",
+        f"📦 <b>Booked Shares:</b>  <code>{closed_qty} shares (50% Tranche)</code>",
+        f"💰 <b>Realized P&L:</b>   <code>+₹{pnl_amt:,.2f}</code>",
+        f"📈 <b>T1 Meter:</b>       {p_bar}",
+        "",
+        "🛡️ <b>RISK-FREE RUNNER ACTIVATED:</b>",
+        f"├─ 📦 <b>Remaining Qty:</b> <code>{remaining_qty} shares</code>",
+        f"├─ 🛑 <b>New Stop Loss:</b> <code>₹{new_sl:,.2f}</code> (<b>Trailed to Break-Even +0.5%</b>)",
+        f"└─ 🚀 <b>Target 2:</b>      <code>₹{t2:,.2f}</code> (<b>+{t2_pct}% Runner</b>)",
+        f"{DIVIDER}",
+        "💎 <i>Position is now 100% Risk-Free. Capital recycled into runner!</i>",
+    ]
+
+    message_text = "\n".join(lines)
+    if not bot_token or not chat_id:
+        print("\n" + "=" * 60)
+        print("TELEGRAM SWING PARTIAL EXIT (Console Preview)")
+        print("=" * 60)
+        print(f"Stock: {sym} | T1 Booked: ₹{exit_p:,.2f} (+{ret_pct:.1f}%) | New SL: ₹{new_sl:,.2f} (Break-Even)")
+        print("=" * 60)
+        return False
+
+    return _post_telegram_message(bot_token, chat_id, message_text)
+
+
 def send_swing_audit_alert(summary: dict, settings=None) -> bool:
     """
-    Format and send weekly swing trade audit summary to Telegram.
+    Format and send weekly swing trade audit summary to Telegram with GUI meters.
     """
     bot_token, chat_id = resolve_telegram_credentials(settings)
 
@@ -341,6 +436,8 @@ def send_swing_audit_alert(summary: dict, settings=None) -> bool:
 
     sign = "+" if net_return_pct >= 0 else ""
     icon = "🚀 🟢" if net_return_pct >= 0 else "🛑"
+    wr_bar = _make_win_rate_bar(win_rate)
+    ret_bar = _make_progress_bar(net_return_pct, 50.0) if net_return_pct > 0 else "🟥" * 4 + "⬜" * 4
 
     lines = [
         "📊 <b>SWING TRADE PERFORMANCE AUDIT</b>",
@@ -348,12 +445,14 @@ def send_swing_audit_alert(summary: dict, settings=None) -> bool:
         f"📅 <b>Audit Period:</b> <code>{period}</code>",
         f"🔍 <b>Strategy:</b>     <code>7–10 Days Swing Trading</code>",
         f"{DIVIDER}",
-        "📈 <b>SUMMARY METRICS</b>",
+        "📈 <b>PERFORMANCE METRICS & METERS</b>",
         f"├─ 🎯 <b>Closed Trades:</b> <code>{total_closed}</code>",
         f"├─ 🥇 <b>Wins:</b>          <code>{wins}</code> (Win Rate: <b>{win_rate:.1f}%</b>)",
+        f"├─ 🎯 <b>Win Meter:</b>     {wr_bar}",
         f"├─ 🛑 <b>Losses:</b>        <code>{losses}</code>",
         f"├─ ⏱️ <b>Avg Hold:</b>      <code>{avg_holding_days:.1f} Trading Days</code>",
         f"├─ 📊 <b>Avg Return:</b>    <code>{avg_return:+.2f}% per trade</code>",
+        f"├─ 📈 <b>Return Meter:</b>  {ret_bar}",
         f"└─ {icon} <b>Total Return:</b>  <b>{sign}{net_return_pct:.2f}%</b>",
         "",
         f"💰 <b>Total Realized P&L:</b> <code>{sign}₹{net_pnl:,.2f}</code>",
