@@ -84,6 +84,121 @@ FALLBACK_LOT_SIZES = {
 }
 
 # ──────────────────────────────────────────────────────────────
+# MARKET REGIME & VOLATILITY FILTERS (New)
+# ──────────────────────────────────────────────────────────────
+
+def get_india_vix(kite: Optional[Any]) -> Optional[float]:
+    """Fetch India VIX live from Kite. Returns VIX value or None if unavailable."""
+    if kite is None:
+        return None
+    try:
+        # India VIX symbol on Kite
+        q = kite.ltp(["NSE:INDIA VIX"])
+        if "NSE:INDIA VIX" in q and q["NSE:INDIA VIX"]["last_price"] > 0:
+            return float(q["NSE:INDIA VIX"]["last_price"])
+    except Exception:
+        pass
+    return None
+
+
+def get_market_regime_and_vix(kite: Optional[Any]) -> Tuple[str, float, Optional[float]]:
+    """
+    Determine comprehensive market regime from Nifty 50 trend + India VIX.
+    Returns: (regime_str, nifty_pct, vix_value)
+    """
+    if kite is None:
+        return "NEUTRAL ⚖️", 0.0, None
+
+    try:
+        q = kite.quote(["NSE:NIFTY 50"])
+        nifty_data = q.get("NSE:NIFTY 50", {})
+        ltp = nifty_data.get("last_price", 0.0)
+        pc = nifty_data.get("ohlc", {}).get("close", 0.0)
+        open_p = nifty_data.get("ohlc", {}).get("open", 0.0)
+
+        if pc <= 0:
+            return "NEUTRAL ⚖️", 0.0, None
+
+        pct = ((ltp - pc) / pc) * 100
+
+        # Get India VIX
+        vix = get_india_vix(kite)
+
+        # Determine regime with VIX context
+        if pct >= 0.3 and ltp >= open_p:
+            regime = "BULLISH 🚀"
+        elif pct <= -0.3 and ltp <= open_p:
+            regime = "BEARISH ⚠️"
+        else:
+            regime = "NEUTRAL ⚖️"
+
+        # VIX overlay
+        if vix is not None:
+            if vix > 20:
+                regime += f" | HIGH VIX ({vix:.1f})"
+            elif vix > 16:
+                regime += f" | ELEVATED VIX ({vix:.1f})"
+
+        return regime, pct, vix
+    except Exception:
+        return "NEUTRAL ⚖️", 0.0, None
+
+
+def is_high_volatility_environment(vix: Optional[float], market_vol: str) -> bool:
+    """Check if current environment is high volatility (avoid/reduce trades)."""
+    if vix is not None and vix > 18:
+        return True
+    if market_vol == "extreme":
+        return True
+    return False
+
+
+def get_time_based_risk_adjustment() -> Dict[str, float]:
+    """Get risk adjustments based on time of day."""
+    now = datetime.datetime.now().time()
+
+    # Early morning (9:15-10:00): High noise, widen SL, reduce size
+    if now <= datetime.time(10, 0):
+        return {
+            "sl_multiplier": 1.25,      # 25% wider SL for opening volatility
+            "size_multiplier": 0.5,     # Half position size
+            "skip_new_entries": False,  # Don't skip, just reduce
+            "phase": "OPENING_VOLATILITY"
+        }
+    # Mid-morning (10:00-11:30): Normal
+    elif now <= datetime.time(11, 30):
+        return {
+            "sl_multiplier": 1.0,
+            "size_multiplier": 1.0,
+            "skip_new_entries": False,
+            "phase": "NORMAL"
+        }
+    # Pre-lunch (11:30-12:30): Lower volume, be careful
+    elif now <= datetime.time(12, 30):
+        return {
+            "sl_multiplier": 1.1,
+            "size_multiplier": 0.75,
+            "skip_new_entries": False,
+            "phase": "PRE_LUNCH_LULL"
+        }
+    # Afternoon (12:30-14:30): Normal to good
+    elif now <= datetime.time(14, 30):
+        return {
+            "sl_multiplier": 1.0,
+            "size_multiplier": 1.0,
+            "skip_new_entries": False,
+            "phase": "AFTERNOON_TREND"
+        }
+    # Late session (14:30-15:25): Scalp mode
+    else:
+        return {
+            "sl_multiplier": 0.8,   # Tighter SL for quick scalp
+            "size_multiplier": 0.5, # Smaller size
+            "skip_new_entries": False,
+            "phase": "LATE_SCALP"
+        }
+
+# ──────────────────────────────────────────────────────────────
 # 1. KITE CONNECT CLIENT INITIALIZATION
 # ──────────────────────────────────────────────────────────────
 
@@ -160,16 +275,51 @@ def get_kite_client(max_retries: int = 3, retry_delay: float = 1.0) -> Optional[
                     return val
         return None
 
+    def _attempt_auto_kite_auth() -> bool:
+        """Attempt automated Kite token generation if expired or missing."""
+        import subprocess
+        auth_script_candidates = [
+            Path("/home/ubuntu/NiftyScanner/nifty_v14_7/scripts/auto_kite_auth.py"),
+            Path("/home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated/scripts/auto_kite_auth.py"),
+            Path(__file__).resolve().parents[3] / "nifty_v14_7" / "scripts" / "auto_kite_auth.py",
+            Path("D:/NiftyScanner/nifty_v14_7/scripts/auto_kite_auth.py"),
+        ]
+        python_candidates = [
+            "/home/ubuntu/NiftyScanner/nifty_v14_7/.venv/bin/python",
+            "/home/ubuntu/NiftyScanner/nifty_v14_7/venv/bin/python",
+            sys.executable,
+        ]
+        script_path = next((p for p in auth_script_candidates if p.exists()), None)
+        if not script_path:
+            return False
+
+        python_bin = next((b for b in python_candidates if os.path.exists(b)), sys.executable)
+        try:
+            print("[*] [KiteConnect] Token invalid or expired. Triggering automated TOTP re-authentication...")
+            res = subprocess.run([python_bin, str(script_path), "--force"], capture_output=True, text=True, timeout=35)
+            if res.returncode == 0:
+                print("✅ [KiteConnect] Automatic re-authentication succeeded! Master token refreshed.")
+                return True
+            else:
+                print(f"⚠️ [KiteConnect] Auto-auth failed (rc={res.returncode}): {res.stderr[:200]}")
+        except Exception as exc:
+            print(f"⚠️ [KiteConnect] Auto-auth invocation error: {exc}")
+        return False
+
     # Retry logic for token file race conditions (auto_auth writes at 7 AM)
     for attempt in range(max_retries):
         token = _read_latest_token()
         api_key = _read_latest_api_key()
 
         if not token or not api_key:
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-                continue
-            return None
+            if attempt == 0 and _attempt_auto_kite_auth():
+                token = _read_latest_token()
+                api_key = _read_latest_api_key()
+            if not token or not api_key:
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                return None
 
         try:
             kite = KiteConnect(api_key=api_key)
@@ -180,6 +330,9 @@ def get_kite_client(max_retries: int = 3, retry_delay: float = 1.0) -> Optional[
             # Token expired or invalid - clear cached invalid token and retry
             error_str = str(e).lower()
             if "incorrect" in error_str or "expired" in error_str or "invalid" in error_str:
+                if attempt == 0 and _attempt_auto_kite_auth():
+                    time.sleep(0.5)
+                    continue
                 if attempt < max_retries - 1:
                     print(f"⚠️ [KiteConnect] Token validation failed (attempt {attempt+1}/{max_retries}): {e}")
                     time.sleep(retry_delay)
@@ -730,6 +883,19 @@ def resolve_option_candidate(
     total_shares = recommended_lots * lot_size
     capital_needed = round(total_shares * option_ltp, 2)
     max_risk_actual = round(total_shares * risk_per_share, 2)
+
+    # ─── NIFTY INDEX OPTIONS: Absolute Points SL Override ───
+    # For NIFTY/BANKNIFTY/SENSEX/FINNIFTY/MIDCPNIFTY: Use min 18 pts absolute SL
+    # This overrides % based SL which can be too tight on high premium options
+    # Typical NIFTY option premium: ₹80-150, 13.5% = ₹11-20 pts (too tight for 15-20 pt index wicks)
+    is_index_option = symbol in INDEX_MAP
+    if is_index_option and not is_btst:
+        min_absolute_sl_pts = 18.0  # Minimum 18 points for NIFTY index options
+        current_sl_pts = entry_price - sl_data["powerful_sl"]
+        if current_sl_pts < min_absolute_sl_pts:
+            sl_data["powerful_sl"] = round(entry_price - min_absolute_sl_pts, 2)
+            sl_data["sl_risk"] = round(entry_price - sl_data["powerful_sl"], 2)
+            sl_data["sl_risk_pct"] = round((entry_price - sl_data["powerful_sl"]) / entry_price * 100, 2)
 
     return {
         "symbol": symbol,

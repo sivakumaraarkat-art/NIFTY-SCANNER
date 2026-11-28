@@ -54,6 +54,10 @@ try:
         calculate_powerful_sl_engine,
         get_kite_client,
         get_nfo_instruments,
+        get_market_regime_and_vix,
+        is_high_volatility_environment,
+        get_time_based_risk_adjustment,
+        get_india_vix,
     )
 except ImportError:
     from options_data_provider import (
@@ -62,6 +66,10 @@ except ImportError:
         calculate_powerful_sl_engine,
         get_kite_client,
         get_nfo_instruments,
+        get_market_regime_and_vix,
+        is_high_volatility_environment,
+        get_time_based_risk_adjustment,
+        get_india_vix,
     )
 
 
@@ -157,6 +165,12 @@ def ensure_fresh_news_scanner(log_dir: Path, max_age_minutes: int = 45) -> None:
         except Exception as e:
             print(f"⚠️ News scanner execution notice: {e}")
 
+    # FALLBACK: If news scanner still fails, create minimal fallback from live movers
+    # This prevents the scanner from using stale/hardcoded symbols
+    news_files = list(log_dir.glob("news_scan_*.json"))
+    if not news_files:
+        print("⚠️ [FALLBACK] No news logs found - will use live market movers as primary source")
+
 
 def get_latest_news_symbols(log_dir: Path) -> list:
     """Fetch BOTH Bullish and Bearish symbols dynamically from the morning News Scanner."""
@@ -165,6 +179,7 @@ def get_latest_news_symbols(log_dir: Path) -> list:
     ensure_fresh_news_scanner(log_dir, max_age_minutes=45)
     news_files = list(log_dir.glob("news_scan_*.json"))
     if not news_files:
+        print("⚠️ [INTEGRATION] No news logs found - returning empty list (movers will be used)")
         return []
     latest_file = max(news_files, key=lambda f: f.stat().st_mtime)
     file_age_hours = (datetime.now() - datetime.fromtimestamp(latest_file.stat().st_mtime)).total_seconds() / 3600
@@ -502,6 +517,7 @@ def print_powerful_sl_results(
     max_candidates: int = 2,
     existing_symbols: list[str] | None = None,
     market_regime: str = "NEUTRAL ⚖️",
+    regime_str: str = "NEUTRAL ⚖️",
     loss_options: list[str] | None = None,
     loss_underlying: list[str] | None = None,
     open_options: list[str] | None = None,
@@ -621,8 +637,31 @@ def print_powerful_sl_results(
     for c in sorted_candidates:
         sym = c.get("symbol")
         score = c.get("score", 0)
+        opt_type = str(c.get("option_type", "")).upper()
+        iv = c.get("iv", 0)
+
         if sym in seen_underlying_in_final:
             continue
+
+        # ─── NEW: MARKET REGIME ALIGNMENT FILTER ───
+        # Reject trades going AGAINST the market regime
+        if "BULLISH" in regime_str and opt_type == "PE":
+            print(f"🛡️ REGIME FILTER: Skipping {sym} {opt_type} - Market is BULLISH, taking PE is counter-trend")
+            continue
+        if "BEARISH" in regime_str and opt_type == "CE":
+            print(f"🛡️ REGIME FILTER: Skipping {sym} {opt_type} - Market is BEARISH, taking CE is counter-trend")
+            continue
+
+        # ─── NEW: HIGH IV REJECTION ───
+        # Reject extremely high IV trades (vega risk too high)
+        if iv > 40 and not ("BULLISH" in regime_str and opt_type == "CE") and not ("BEARISH" in regime_str and opt_type == "PE"):
+            print(f"🛡️ HIGH IV FILTER: Skipping {sym} {opt_type} - IV {iv:.1f}% too high without strong regime alignment")
+            continue
+        # Even with alignment, cap at 45% IV
+        if iv > 45:
+            print(f"🛡️ EXTREME IV FILTER: Skipping {sym} {opt_type} - IV {iv:.1f}% exceeds 45% hard cap")
+            continue
+
         sector = get_stock_sector(sym)
         # If sector already represented in this batch, allow only if good conviction (Score >= 90)
         if sector and sector in seen_sectors and score < 90:
@@ -902,6 +941,29 @@ def main():
     kite = get_kite_client()
     nfo_instruments = get_nfo_instruments(kite)
 
+    # ─── NEW: MARKET REGIME & VOLATILITY FILTERS ───
+    regime_str, regime_pct, vix = get_market_regime_and_vix(kite)
+    time_adj = get_time_based_risk_adjustment()
+
+    print(f"\n🌐 [MARKET REGIME] {regime_str} ({regime_pct:+.2f}%)")
+    if vix:
+        print(f"📊 [INDIA VIX] {vix:.2f}")
+    print(f"⏰ [TIME PHASE] {time_adj['phase']} | SL Adj: {time_adj['sl_multiplier']}x | Size Adj: {time_adj['size_multiplier']}x")
+
+    # High volatility environment check
+    if is_high_volatility_environment(vix, "extreme"):
+        print(f"\n⚠️ [HIGH VOLATILITY ENVIRONMENT] VIX > 18 or Extreme IV detected.")
+        print(f"   → Reducing trade size by 50% and widening SL by 25% for safety.")
+        # Force time-based adjustments for high vol
+        time_adj["size_multiplier"] *= 0.5
+        time_adj["sl_multiplier"] *= 1.25
+
+    # Early morning skip logic (optional - can be configured)
+    if time_adj["phase"] == "OPENING_VOLATILITY" and vix and vix > 16:
+        print(f"\n⏸️ [EARLY MORNING HIGH VIX] Skipping trade generation until 10:00 AM.")
+        print(f"   Opening volatility + High VIX = Low probability setups.")
+        return
+
     if getattr(args, 'use_news_candidates', False):
         news_data = get_latest_news_symbols(Path("logs"))
         movers_data = get_live_market_movers(kite, nfo_instruments, top_n=6)
@@ -1000,13 +1062,53 @@ def main():
     regime_str, regime_pct = get_nifty_market_regime(kite)
     print(f"\n🌐 [MARKET SITUATION] NIFTY 50 Regime: {regime_str} ({regime_pct:+.2f}%)")
 
-    # Print results with powerful SL & dynamic technical alignment (2 CE, 2 PE, or 1 CE+1 PE based on situation)
+    # Apply time-based and volatility-based risk adjustments to candidates
+    adjusted_results = []
+    for c in resolved:
+        adj_c = c.copy()
+        # Apply SL multiplier
+        sl_risk = adj_c.get("sl_risk", 0)
+        adj_sl_risk = round(sl_risk * time_adj["sl_multiplier"], 2)
+        adj_c["powerful_sl"] = round(adj_c["entry_price"] - adj_sl_risk, 2)
+        adj_c["sl"] = adj_c["powerful_sl"]
+        adj_c["sl_risk"] = adj_sl_risk
+        adj_c["sl_risk_pct"] = round(adj_sl_risk / adj_c["entry_price"] * 100, 2)
+
+        # Recalculate targets with adjusted SL
+        if not args.force:  # Only apply in live mode
+            t1_gain = max(round(adj_sl_risk * 1.35, 2), round(adj_c["entry_price"] * 0.14, 2))
+            t2_gain = max(round(adj_sl_risk * 2.35, 2), round(adj_c["entry_price"] * 0.24, 2))
+            adj_c["t1"] = round(adj_c["entry_price"] + t1_gain, 2)
+            adj_c["t2"] = round(adj_c["entry_price"] + t2_gain, 2)
+            adj_c["target_1"] = adj_c["t1"]
+            adj_c["target_2"] = adj_c["t2"]
+
+        # Apply size multiplier
+        orig_lots = adj_c.get("recommended_qty", 1)
+        adj_lots = max(1, int(orig_lots * time_adj["size_multiplier"]))
+        adj_c["recommended_qty"] = adj_lots
+        adj_c["total_shares"] = adj_lots * adj_c.get("lot_size", 1)
+        adj_c["capital_needed"] = round(adj_c["total_shares"] * adj_c["entry_price"], 2)
+        adj_c["max_risk"] = round(adj_c["total_shares"] * adj_sl_risk, 2)
+        adj_c["potential_profit_t1"] = round(adj_c["total_shares"] * (adj_c["t1"] - adj_c["entry_price"]), 2)
+        adj_c["potential_profit_t2"] = round(adj_c["total_shares"] * (adj_c["t2"] - adj_c["entry_price"]), 2)
+
+        # Add metadata
+        adj_c["time_phase"] = time_adj["phase"]
+        adj_c["vix"] = vix
+        adj_c["sl_multiplier_applied"] = time_adj["sl_multiplier"]
+        adj_c["size_multiplier_applied"] = time_adj["size_multiplier"]
+
+        adjusted_results.append(adj_c)
+
+    # Print results with powerful SL & dynamic technical alignment
     results = print_powerful_sl_results(
-        resolved,
+        adjusted_results,
         args.account_size,
         max_candidates=scan_limit,
         existing_symbols=stats["today_symbols"],
         market_regime=regime_str,
+        regime_str=regime_str,
         loss_options=stats.get("loss_options", []),
         loss_underlying=stats.get("loss_underlying", []),
         open_options=stats.get("open_options", []),

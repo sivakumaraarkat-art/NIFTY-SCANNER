@@ -31,8 +31,13 @@ CRON_TZ=Asia/Kolkata
 
 # 8. Options Intraday Scan (Every 30 Minutes: 09:50 AM, then :20 and :50 from 10:00 to 14:50, Max 2 Trades per Scan, Min Score 90, Max 10 Trades/Day)
 # FIX: flock -w 300 waits up to 5 min for lock instead of -n which silently drops runs
+# MARKET HOURS ONLY: 09:50 - 14:50 IST (no 15:20+ runs to avoid EOD noise)
 50 09 * * 1-5 flock -w 300 /tmp/intraday_scan.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 90 --max-daily-trades 10 >> /home/ubuntu/NiftyScanner/cron_logs/cron_intraday.log 2>&1'
 20,50 10-14 * * 1-5 flock -w 300 /tmp/intraday_scan.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 90 --max-daily-trades 10 >> /home/ubuntu/NiftyScanner/cron_logs/cron_intraday.log 2>&1'
+
+# 8b. SAFETY GUARD: Explicitly BLOCK any runs outside 09:50-14:50 to prevent 22:32-type ghost runs
+# This is a comment-only safeguard - cron doesn't support conditional time windows natively
+# The scanner itself has is_market_hours() check which will return False and exit cleanly
 
 # 8b. MCX Crude Oil Momentum Scan (Runs daily at 10:00 AM)
 00 10 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_crude_swing_scan.py >> /home/ubuntu/NiftyScanner/cron_logs/cron_crude.log 2>&1
@@ -95,8 +100,11 @@ CRON_TZ=Asia/Kolkata
 00-30/2 10 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel.log 2>&1
 
 # ==============================================================================
-# 14d. WEEKEND BACKTEST ENGINE (SATURDAY 10:00 AM)
+# 14d. WEEKEND BACKTEST ENGINE & SATURDAY TOKEN REFRESH (SATURDAY 10:00 AM)
 # ==============================================================================
+# Pre-Backtest Token Refresh (Saturdays 09:50 AM): Ensures active Zerodha token before 10:00 AM backtest
+50 09 * * 6 /home/ubuntu/NiftyScanner/nifty_v14_7/.venv/bin/python /home/ubuntu/NiftyScanner/nifty_v14_7/scripts/auto_kite_auth.py --force >> /home/ubuntu/NiftyScanner/nifty_v14_7/logs/auto_auth_cron.log 2>&1
+
 # Replays Mon-Fri trading using historical 5-min data, validates thresholds,
 # simulates all quality shields, generates Telegram + Google Drive report
 00 10 * * 6 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/weekend_backtest_engine.py --days 5 >> /home/ubuntu/NiftyScanner/cron_logs/cron_weekend_backtest.log 2>&1
