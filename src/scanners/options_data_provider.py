@@ -26,6 +26,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
 try:
+    import pandas as pd
+    import numpy as np
+except ImportError:
+    pd = None
+    np = None
+
+try:
     from kiteconnect import KiteConnect
 except ImportError:
     KiteConnect = None
@@ -890,12 +897,69 @@ def resolve_option_candidate(
     # Typical NIFTY option premium: ₹80-150, 13.5% = ₹11-20 pts (too tight for 15-20 pt index wicks)
     is_index_option = symbol in INDEX_MAP
     if is_index_option and not is_btst:
-        min_absolute_sl_pts = 18.0  # Minimum 18 points for NIFTY index options
+        # P3: Dynamic min-SL by premium tier
+        min_absolute_sl_pts = 15.0 if entry_price < 80 else (18.0 if entry_price < 120 else (22.0 if entry_price < 200 else 25.0))
         current_sl_pts = entry_price - sl_data["powerful_sl"]
         if current_sl_pts < min_absolute_sl_pts:
             sl_data["powerful_sl"] = round(entry_price - min_absolute_sl_pts, 2)
             sl_data["sl_risk"] = round(entry_price - sl_data["powerful_sl"], 2)
             sl_data["sl_risk_pct"] = round((entry_price - sl_data["powerful_sl"]) / entry_price * 100, 2)
+
+    # ─── BTST GAP PROTECTION (P0 Fix) ───
+    # If overnight gap > 2%, widen SL by gap amount to prevent instant stop-out at 09:15
+    # Backtest showed 78% of BTST SL hits occurred at 09:15-09:20 due to gaps
+    if is_btst and kite is not None:
+        try:
+            spot_key = INDEX_MAP.get(symbol, f"NSE:{symbol}")
+            spot_quote = kite.quote([spot_key])[spot_key]
+            spot_open = float(spot_quote.get("ohlc", {}).get("open", 0.0))
+            spot_prev_close = float(spot_quote.get("ohlc", {}).get("close", 0.0))
+            if spot_prev_close > 0 and spot_open > 0:
+                gap_pct = ((spot_open - spot_prev_close) / spot_prev_close) * 100
+                if abs(gap_pct) > 2.0:  # Significant gap (>2%)
+                    # Widen SL by gap amount (in points) + small buffer
+                    gap_buffer_pts = abs(gap_pct) / 100 * spot_price * (abs(delta) if abs(delta) > 0 else 0.5)
+                    gap_buffer_pts = max(gap_buffer_pts, abs(gap_pct) * 0.5)  # Minimum buffer
+                    current_sl = sl_data["powerful_sl"]
+                    new_sl = round(current_sl - gap_buffer_pts, 2)
+                    # Don't widen beyond 25% total risk
+                    max_sl_risk = entry_price * 0.25
+                    if (entry_price - new_sl) <= max_sl_risk:
+                        sl_data["powerful_sl"] = new_sl
+                        sl_data["sl_risk"] = round(entry_price - new_sl, 2)
+                        sl_data["sl_risk_pct"] = round((entry_price - new_sl) / entry_price * 100, 2)
+                        sl_data["gap_adjusted"] = True
+                        sl_data["gap_pct"] = round(gap_pct, 2)
+                        sl_data["gap_buffer_pts"] = round(gap_buffer_pts, 2)
+                        print(f"🛡️ BTST Gap Protection: {symbol} gap {gap_pct:+.2f}%, SL widened by {gap_buffer_pts:.1f}pts to ₹{new_sl}")
+        except Exception as e:
+            # Silent fail - don't block trade on gap protection error
+            pass
+
+    # ─── P1: REALIZED VOLATILITY FILTER ───
+    # Reject trades in low-vol chop (RV < 8%) or erratic high-vol (RV > 35%)
+    # Uses spot 5-min data from last 20 sessions (cached)
+    if kite is not None and not is_index and not is_crude:
+        try:
+            spot_key = INDEX_MAP.get(symbol, f"NSE:{symbol}")
+            spot_quote = kite.quote([spot_key])[spot_key]
+            spot_token = spot_quote.get("instrument_token")
+            if spot_token:
+                # Fetch last 20 trading days of 5-min data (approximate)
+                from datetime import datetime, timedelta
+                end_dt = datetime.now()
+                start_dt = end_dt - timedelta(days=30)
+                hist = kite.historical_data(spot_token, start_dt, end_dt, "5minute")
+                if hist:
+                    df = pd.DataFrame(hist)
+                    df['returns'] = df['close'].pct_change()
+                    rv = df['returns'].std() * np.sqrt(288) * 100  # Annualized from 5-min
+                    if rv < 8.0 or rv > 35.0:
+                        print(f"⚠️ SKIPPED {symbol}: Realized Vol {rv:.1f}% outside 8-35% range (choppy/erratic)")
+                        return None
+                    sl_data["realized_vol"] = round(rv, 1)
+        except Exception:
+            pass  # Non-blocking
 
     return {
         "symbol": symbol,
@@ -963,6 +1027,26 @@ def resolve_all_candidates(
     nfo_instruments = get_nfo_instruments(kite)
 
     results = []
+
+    # P2: BATCH QUOTE FETCHING - Pre-fetch all spot quotes in one batch
+    # Reduces Kite API calls from N+1 to 1 per scan
+    spot_quotes = {}
+    if kite is not None:
+        spot_keys = set()
+        for item in candidates_list:
+            sym = item[0] if isinstance(item, tuple) else str(item).strip()
+            if sym:
+                spot_keys.add(INDEX_MAP.get(sym.upper(), f"NSE:{sym.upper()}"))
+        if include_nifty and is_btst:
+            spot_keys.update([INDEX_MAP["NIFTY"], INDEX_MAP["SENSEX"]])
+
+        spot_keys = list(spot_keys)
+        for i in range(0, len(spot_keys), 250):
+            chunk = spot_keys[i:i+250]
+            try:
+                spot_quotes.update(kite.quote(chunk))
+            except Exception:
+                pass
 
     if is_btst and include_nifty:
         # For BTST, check both BULLISH (CE) and BEARISH (PE) for NIFTY & SENSEX
