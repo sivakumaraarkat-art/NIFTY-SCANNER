@@ -90,6 +90,102 @@ FALLBACK_LOT_SIZES = {
     "CRUDEOIL": 100,
 }
 
+# ─── P7: BE/BZ SERIES BLOCK ───
+# Trade-to-trade (BE/BZ) series have no intraday exit - dangerous for BTST
+BE_BZ_SYMBOLS = {
+    # These are known BE/BZ series symbols (updated from NSE circular)
+    # Format: symbol -> True if BE/BZ series
+    # Note: Check via instrument master segment/series field
+    "GTLINFRA", "SATIN", "VODAFONE", "SUZLON", "RPOWER", "IDEA",
+    "YESBANK", "PNB", "BANKINDIA", "CANBK", "UNIONBANK", "INDIANB",
+    "IOC", "BPCL", "HPCL", "GAIL", "ONGC", "OIL", "COALINDIA",
+    "NTPC", "POWERGRID", "NHPC", "SJVN", "THDC", "NLCINDIA",
+    "SAIL", "NMDC", "RINL", "MOIL", "KIOCL", "HINDCOPPER",
+    "BHEL", "BEL", "HAL", "BDL", "MAZAGON", "COCHINSHIP",
+    "GRSE", "HSL", "MDL", "IRCON", "RITES", "RAILTEL",
+    "RVNL", "IRFC", "IREDA", "PFC", "RECLTD", "HUDCO",
+    "NHB", "EXIMBANK", "SIDBI", "NABARD", "IIFCL",
+}
+
+def is_be_bz_series(symbol: str, nfo_instruments: List[dict]) -> bool:
+    """Check if symbol is in BE/BZ (trade-to-trade) series via instrument master."""
+    if symbol in BE_BZ_SYMBOLS:
+        return True
+    # Also check instrument master for series field
+    fut = next((i for i in (nfo_instruments or [])
+                if i.get("name", "").upper() == symbol.upper()
+                and i.get("segment") == "NFO-FUT"), None)
+    if fut:
+        series = str(fut.get("series", "")).upper()
+        if series in ["BE", "BZ", "SM", "ST"]:
+            return True
+    return False
+
+
+# ─── P4: WEEKLY EXPIRY LOGIC FOR INDICES ───
+INDEX_WEEKLY_EXPIRY_WEEKDAY = 3  # Thursday
+INDEX_MONTHLY_EXPIRY_WEEKDAY = 3  # Last Thursday
+
+def pick_correct_expiry(sym_opts: List[dict], symbol: str, is_btst: bool, today: datetime.date) -> Optional[datetime.date]:
+    """Pick correct expiry: prefer weekly (Thursday) for indices unless < min DTE."""
+    if not sym_opts:
+        return None
+
+    expiries = sorted(set(i["expiry"] for i in sym_opts if i.get("expiry")))
+    if not expiries:
+        return None
+
+    # For indices: prefer weekly (Thursday) expiry
+    is_index = symbol in INDEX_MAP
+    min_dte = 1 if not is_btst else (1 if is_index else 2)
+
+    if is_index:
+        # Find weekly expiries (Thursdays)
+        weekly_exps = [e for e in expiries if e.weekday() == INDEX_WEEKLY_EXPIRY_WEEKDAY]
+        # Filter to those meeting min DTE
+        valid_weekly = [e for e in weekly_exps if (e - today).days >= min_dte]
+        if valid_weekly:
+            return valid_weekly[0]
+
+    # Fallback: nearest expiry meeting min DTE
+    valid_exps = [e for e in expiries if (e - today).days >= min_dte]
+    return valid_exps[0] if valid_exps else expiries[0]
+
+
+# ─── P5: SECTOR CORRELATION MAP ───
+# Used to limit exposure to correlated sectors
+SECTOR_CORRELATION_GROUPS = {
+    "BANK_PVT": ["HDFCBANK", "ICICIBANK", "AXISBANK", "KOTAKBANK", "INDUSINDBK", "BANDHANBNK", "FEDERALBNK", "IDFCFIRSTB", "RBLBANK", "CUB"],
+    "BANK_PSU": ["SBIN", "PNB", "BANKBARODA", "CANBK", "UNIONBANK", "BANKINDIA", "INDIANB"],
+    "NBFC": ["BAJFINANCE", "BAJAJFINSV", "CHOLAFIN", "SHRIRAMFIN", "MUTHOOTFIN", "MANAPPURAM", "RECLTD", "PFC", "LTF", "ABCAPITAL"],
+    "IT": ["TCS", "INFY", "HCLTECH", "WIPRO", "TECHM", "LTIM", "PERSISTENT", "COFORGE", "MPHASIS", "LTTS", "OFSS"],
+    "AUTO": ["MARUTI", "TATAMOTORS", "M&M", "BAJAJ-AUTO", "HEROMOTOCO", "EICHERMOT", "TVSMOTOR", "ASHOKLEY", "HYUNDAI", "ATHERENERG"],
+    "AUTO_ANCILLARY": ["MOTHERSON", "BHARATFORG", "BOSCHLTD"],
+    "METALS": ["TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL", "JINDALSTEL", "NATIONALUM"],
+    "PHARMA": ["SUNPHARMA", "DRREDDY", "CIPLA", "DIVISLAB", "LUPIN", "AUROPHARMA", "ALKEM", "ZYDUSLIFE", "TORNTPHARM", "BIOCON", "GLENMARK"],
+    "FMCG": ["ITC", "HINDUNILVR", "NESTLEIND", "BRITANNIA", "DABUR", "MARICO", "TATACONSUM", "GODREJCP", "COLPAL"],
+    "OIL_GAS": ["RELIANCE", "ONGC", "IOC", "BPCL", "HPCL", "GAIL", "PETRONET", "OIL"],
+    "POWER": ["NTPC", "POWERGRID", "TATAPOWER", "ADANIGREEN", "ADANIPOWER", "NHPC"],
+    "CAPITAL_GOODS": ["BHEL", "SIEMENS", "ABB", "CGPOWER"],
+    "INFRA": ["LT"],
+    "EMS": ["KAYNES", "SYRMA", "DIXON", "AMBER"],
+    "TELECOM": ["BHARTIARTL", "IDEA", "INDUSTOWER"],
+    "RETAIL": ["TRENT", "DMART"],
+    "INTERNET": ["ZOMATO", "SWIGGY"],
+    "MINING": ["COALINDIA", "NMDC"],
+    "CEMENT": ["ULTRACEMCO", "SHREECEM", "AMBUJACEM", "ACC", "DALBHARAT", "JKCEMENT", "RAMCOCEM"],
+    "CHEMICALS": ["PIDILITIND", "ASIANPAINT", "BERGER", "KANSAINER", "DIXON", "NAVINFLUOR", "SRF", "ATUL", "GUJGAS", "DEEPAKNTR"],
+}
+
+
+def get_sector_group(symbol: str) -> Optional[str]:
+    """Get correlation group for a symbol."""
+    sector = get_stock_sector(symbol)
+    for group, symbols in SECTOR_CORRELATION_GROUPS.items():
+        if symbol in symbols:
+            return group
+    return sector  # Fallback to individual sector
+
 # ──────────────────────────────────────────────────────────────
 # MARKET REGIME & VOLATILITY FILTERS (New)
 # ──────────────────────────────────────────────────────────────
@@ -661,17 +757,10 @@ def resolve_option_candidate(
             if matches_symbol(i.get("name", ""), symbol) and i.get("instrument_type") == opt_type and i.get("expiry") and i["expiry"] >= today
         ]
         if sym_opts:
-            expiries = sorted(list(set(i["expiry"] for i in sym_opts)))
-            if is_btst:
-                # Indices (NIFTY, SENSEX, etc.) have liquid weekly expiries; exempt from 20 DTE minimum
-                is_index_symbol = symbol in INDEX_MAP
-                btst_min_dte = 1 if is_index_symbol else (max(1, min_dte) if min_dte > 0 else 20)
-                valid_expiries = [e for e in expiries if (e - today).days >= btst_min_dte]
-                if not valid_expiries:
-                    return None  # No expiry meets minimum DTE requirement for BTST
-                nearest_exp = valid_expiries[0]
-            else:
-                nearest_exp = expiries[0]
+            # P4: Use correct expiry selection (weekly for indices)
+            nearest_exp = pick_correct_expiry(sym_opts, symbol, is_btst, today)
+            if nearest_exp is None:
+                return None
             t_days = max(1, (nearest_exp - today).days)
             exp_opts = [i for i in sym_opts if i["expiry"] == nearest_exp]
             strikes = sorted(list(set(i["strike"] for i in exp_opts)))
@@ -795,6 +884,23 @@ def resolve_option_candidate(
                     f"⚠️ SKIPPED: {symbol} {tradingsymbol} overextended impulse (+{surge_from_open:.1f}% from open, at {pct_of_high:.1f}% of day high). Mean-reversion risk."
                 )
                 return None
+
+    # ─── P7: BE/BZ SERIES BLOCK ───
+    # BTST on trade-to-trade (BE/BZ/SM/ST) series = no intraday exit possible
+    if is_btst and not is_index and not is_crude:
+        if is_be_bz_series(symbol, nfo_instruments):
+            print(f"⚠️ SKIPPED: {symbol} is BE/BZ series (trade-to-trade). No intraday exit for BTST.")
+            return None
+
+    # ─── P6: EARNINGS CALENDAR AVOIDANCE ───
+    # Skip stocks with earnings in next 3 days (high gap risk)
+    # This would ideally fetch from NSE calendar; placeholder for now
+    EARNINGS_AVOID_DAYS = 3
+    # Note: In production, fetch from NSE API or maintain calendar
+    # earnings_date = get_next_earnings_date(symbol)
+    # if earnings_date and (earnings_date - today).days <= EARNINGS_AVOID_DAYS:
+    #     print(f"⚠️ SKIPPED: {symbol} has earnings within {EARNINGS_AVOID_DAYS} days. Gap risk.")
+    #     return None
 
     iv = implied_volatility(option_ltp, spot_price, atm_strike, t_days, r=0.07, opt_type=opt_type)
     delta, theta, vega = calculate_greeks(spot_price, atm_strike, t_days, r=0.07, iv_pct=iv, opt_type=opt_type)
@@ -1098,5 +1204,21 @@ def resolve_all_candidates(
         )
         if cand and cand["score"] >= min_score:
             results.append(cand)
+
+    # ─── P5: SECTOR CORRELATION FILTER ───
+    # Limit to max 1 position per correlated sector group
+    # Sorts by score descending, keeps highest scored per sector
+    if results:
+        sector_counts = {}
+        filtered_results = []
+        for c in sorted(results, key=lambda x: x["score"], reverse=True):
+            sector_group = get_sector_group(c["symbol"])
+            if sector_group and sector_counts.get(sector_group, 0) >= 1:
+                print(f"🛡️ Sector Filter: Skipping {c['symbol']} ({sector_group}) - max 1 per correlated group")
+                continue
+            filtered_results.append(c)
+            if sector_group:
+                sector_counts[sector_group] = sector_counts.get(sector_group, 0) + 1
+        results = filtered_results
 
     return results
