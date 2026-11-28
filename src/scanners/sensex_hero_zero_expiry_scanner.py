@@ -361,7 +361,12 @@ def resolve_sensex_hero_zero_candidates(
             capital = round(ltp * tot_qty, 2)
             t1 = round(ltp * 2.0, 2)
             t2 = round(ltp * 4.0, 2)
-            sl = round(ltp * 0.50, 2)
+            # ─── SENSEX HERO-ZERO: Minimum 8 pts absolute SL for 0 DTE gamma ───
+            # 50% of premium can be too tight (e.g., ₹8.05 * 0.5 = 4.02 pts = ~0.5% spot)
+            # Minimum 8 pts ensures SL survives normal expiry day wicks (~15-20 pts SENSEX)
+            sl_pct = round(ltp * 0.50, 2)
+            sl_abs_8pts = round(ltp - 8.0, 2)
+            sl = min(sl_pct, sl_abs_8pts)  # Use the WIDER (safer) SL = lower price
             risk = round((ltp - sl) * tot_qty, 2)
 
             chg_sign = "+" if spot_change >= 0 else ""
@@ -408,7 +413,12 @@ def resolve_sensex_hero_zero_candidates(
             capital = round(ltp * tot_qty, 2)
             t1 = round(ltp * 2.0, 2)
             t2 = round(ltp * 4.0, 2)
-            sl = round(ltp * 0.50, 2)
+            # ─── SENSEX HERO-ZERO: Minimum 8 pts absolute SL for 0 DTE gamma ───
+            # 50% of premium can be too tight (e.g., ₹8.05 * 0.5 = 4.02 pts = ~0.5% spot)
+            # Minimum 8 pts ensures SL survives normal expiry day wicks (~15-20 pts SENSEX)
+            sl_pct = round(ltp * 0.50, 2)
+            sl_abs_8pts = round(ltp - 8.0, 2)
+            sl = min(sl_pct, sl_abs_8pts)  # Use the WIDER (safer) SL = lower price
             risk = round((ltp - sl) * tot_qty, 2)
 
             chg_sign = "+" if spot_change >= 0 else ""
@@ -552,6 +562,15 @@ def send_sensex_hero_zero_telegram_alert(candidates: List[Dict[str, Any]], time_
         oi_str = f"{c.get('oi', 0):,}" if c.get('oi') else "N/A"
         vol_str = f"{c.get('volume', 0):,}" if c.get('volume') else "N/A"
 
+        # Deep analysis data
+        sl_pct = round((sl_pts / entry * 100), 1)
+        t1_pct = round((t1_pts / entry * 100), 1)
+        t2_pct = round((t2_pts / entry * 100), 1)
+        sl_abs_pts = round(sl_pts, 2)
+        r_r_t1 = round(t1_pts / sl_pts, 2) if sl_pts > 0 else 0
+        r_r_t2 = round(t2_pts / sl_pts, 2) if sl_pts > 0 else 0
+        max_risk_pct = round((max_risk / capital * 100), 1) if capital > 0 else 0
+
         lines = [
             f"{icon} <b>#{i} BUY SENSEX {int(strike)} {opt_type} (HERO-ZERO)</b>",
             f"{DIVIDER}",
@@ -563,24 +582,25 @@ def send_sensex_hero_zero_telegram_alert(candidates: List[Dict[str, Any]], time_
             "💰 <b>HERO-ZERO TRADE LEVELS</b>",
             f"├─ 📊 <b>Spot Price:</b>  {tg_code(tg_money(spot))} (ATM {int(strike)})",
             f"├─ 🟢 <b>Entry Price:</b> {tg_code(tg_money(entry))} (Live Market)",
-            f"├─ 🛑 <b>Risk SL:</b>     {tg_code(tg_money(sl))} (<b>-{tg_points(sl_pts)} / 50% Cap</b>)",
-            f"├─ 🥇 <b>Target 1:</b>    {tg_code(tg_money(t1))} (<b>+{tg_points(t1_pts)} / +100%</b>)",
-            f"└─ 🚀 <b>Target 2:</b>    {tg_code(tg_money(t2))} (<b>+{tg_points(t2_pts)} / +300%</b>)",
+            f"├─ 🛑 <b>Risk SL:</b>     {tg_code(tg_money(sl))} (<b>-{tg_points(sl_pts)} / {sl_pct}% / {sl_abs_pts} pts min</b>)",
+            f"├─ 🥇 <b>Target 1:</b>    {tg_code(tg_money(t1))} (<b>+{tg_points(t1_pts)} / +{t1_pct}% / {r_r_t1}R</b>)",
+            f"└─ 🚀 <b>Target 2:</b>    {tg_code(tg_money(t2))} (<b>+{tg_points(t2_pts)} / +{t2_pct}% / {r_r_t2}R</b>)",
             "",
             "📦 <b>POSITION SIZING & RISK</b>",
             f"├─ 🏷️ <b>Lots:</b>        {tg_code(f'{lots} lots ({lot_sz}/lot = {tot_qty} qty)')}",
             f"├─ 💵 <b>Capital:</b>     {tg_code(tg_money(capital))} (Within ₹1,500 budget)",
-            f"└─ 🛡️ <b>Max Risk:</b>    {tg_code(tg_money(max_risk))} (Max Loss strictly small)",
+            f"└─ 🛡️ <b>Max Risk:</b>    {tg_code(tg_money(max_risk))} ({max_risk_pct}% of capital)",
             "",
             "🎯 <b>ZERODHA ORDER EXECUTION TICKET</b>",
             f"├─ 🟢 <b>Action:</b>      BUY {tg_code(c['option_symbol'])}",
             f"├─ 📦 <b>Quantity:</b>    {tg_code(f'{tot_qty} shares ({lots} Lots)')}",
             f"├─ 💵 <b>Limit Price:</b> {tg_code(tg_money(entry))} (₹8 - ₹15 target range)",
             f"├─ 🛑 <b>GTT Stoploss:</b> {tg_code(tg_money(sl))} (Trigger @ {tg_money(sl)})",
-            f"├─ 🥇 <b>Target 1:</b>    {tg_code(tg_money(t1))} (+100% / 2x Multiplier)",
-            f"└─ 🚀 <b>Target 2:</b>    {tg_code(tg_money(t2))} (+300% / 4x Multibagger)",
+            f"├─ 🥇 <b>Target 1:</b>    {tg_code(tg_money(t1))} (+100% / 2x Multiplier / {r_r_t1}R)",
+            f"└─ 🚀 <b>Target 2:</b>    {tg_code(tg_money(t2))} (+300% / 4x Multibagger / {r_r_t2}R)",
             f"{DIVIDER}",
-            "🔥 <b>V14.7 STRATEGY:</b> <i>Risk small capital for explosive 2x-5x expiry payoff. Book 50% @ T1!</i>",
+            f"🔬 <b>DEEP ANALYSIS:</b> SL {sl_pct}% ({sl_abs_pts} pts) | T1 {t1_pct}% ({r_r_t1}R) | T2 {t2_pct}% ({r_r_t2}R) | MaxRisk {max_risk_pct}% cap",
+            f"🔥 <b>V14.7 STRATEGY:</b> <i>Risk small capital for explosive 2x-5x expiry payoff. Book 50% @ T1!</i>",
         ]
 
         _send_hero_zero_tg("\n".join(lines))
