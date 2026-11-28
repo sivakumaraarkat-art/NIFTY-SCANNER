@@ -39,6 +39,16 @@ load_dotenv(ROOT / ".env")
 
 STATE_FILE = ROOT / "database" / "gtt_sentinel_state.json"
 
+# ─── HERO ZERO INDEX OPTIONS PROFILES ───
+# These use Hero Zero logic: SL = min 8pts absolute, T1 = 2x, T2 = 4x
+HERO_ZERO_INDEX_OPTIONS = {
+    "NIFTY",
+    "BANKNIFTY",
+    "SENSEX",
+    "FINNIFTY",
+    "MIDCPNIFTY",
+}
+
 TARGET_PROFILES = {
     "CONCORDBIO": {"target": 603.00, "sl": 540.40},
     "GALLANTT":   {"target": 592.00, "sl": 516.90},
@@ -177,32 +187,58 @@ def check_and_attach_oco(kite, verbose=False):
             target = profile["target"]
             sl = profile["sl"]
         else:
-            # Default fallback: 10% target, 3.5% SL
-            target = round(avg_price * 1.10, 1)
-            sl = round(avg_price * 0.965, 1)
+            # Check if Hero Zero index option
+            base_sym = sym.replace("CE", "").replace("PE", "")
+            # Extract base symbol (NIFTY, BANKNIFTY, SENSEX, etc.)
+            for idx in HERO_ZERO_INDEX_OPTIONS:
+                if idx in sym:
+                    # Hero Zero logic: SL = max 50% premium OR min 8pts absolute
+                    # T1 = 2x entry, T2 = 4x entry
+                    sl_pct = round(avg_price * 0.50, 2)
+                    sl_abs = round(avg_price - 8.0, 2)
+                    sl = min(sl_pct, sl_abs)  # Wider SL (lower price)
+                    target = round(avg_price * 2.0, 2)  # 2x
+                    t2 = round(avg_price * 4.0, 2)    # 4x
+                    print(f"   🏛️ HERO ZERO MODE: {sym} | SL: {sl:.2f} (min 8pts) | T1: {target:.2f} (2x) | T2: {t2:.2f} (4x)")
+                    # Use target for OCO leg 1, we'll add T2 as second leg
+                    break
+            else:
+                # Default fallback: 10% target, 3.5% SL
+                target = round(avg_price * 1.10, 1)
+                sl = round(avg_price * 0.965, 1)
 
         sl_limit = round(max(0.05, sl - 0.50), 2)
 
-        print(f"\n🚨 NEW FILL DETECTED: {sym} (Qty: {qty} @ ₹{avg_price:.2f})")
-        print(f"   • Attaching OCO Stop Loss @ ₹{sl:.2f} | Target @ ₹{target:.2f}...")
+        # Detect Hero Zero index option
+        is_hero_zero = False
+        t2 = None
+        for idx in HERO_ZERO_INDEX_OPTIONS:
+            if idx in sym:
+                is_hero_zero = True
+                t2 = round(avg_price * 4.0, 2)  # T2 = 4x entry
+                break
 
-        trigger_values = [sl, target]
-        sell_orders = [
-            {
-                "transaction_type": kite.TRANSACTION_TYPE_SELL,
-                "quantity": qty,
-                "order_type": kite.ORDER_TYPE_LIMIT,
-                "product": product,
-                "price": sl_limit
-            },
-            {
-                "transaction_type": kite.TRANSACTION_TYPE_SELL,
-                "quantity": qty,
-                "order_type": kite.ORDER_TYPE_LIMIT,
-                "product": product,
-                "price": target
-            }
-        ]
+        print(f"\n🚨 NEW FILL DETECTED: {sym} (Qty: {qty} @ ₹{avg_price:.2f})")
+        if is_hero_zero:
+            print(f"   🏛️ HERO ZERO MODE: SL ₹{sl:.2f} (min 8pts) | T1 ₹{target:.2f} (2x) | T2 ₹{t2:.2f} (4x)")
+        else:
+            print(f"   • Attaching OCO Stop Loss @ ₹{sl:.2f} | Target @ ₹{target:.2f}...")
+
+        if is_hero_zero:
+            # 3-leg OCO for Hero Zero: SL, T1, T2
+            trigger_values = [sl, target, t2]
+            sell_orders = [
+                {"transaction_type": kite.TRANSACTION_TYPE_SELL, "quantity": qty, "order_type": kite.ORDER_TYPE_LIMIT, "product": product, "price": sl_limit},
+                {"transaction_type": kite.TRANSACTION_TYPE_SELL, "quantity": qty, "order_type": kite.ORDER_TYPE_LIMIT, "product": product, "price": target},
+                {"transaction_type": kite.TRANSACTION_TYPE_SELL, "quantity": qty, "order_type": kite.ORDER_TYPE_LIMIT, "product": product, "price": t2},
+            ]
+        else:
+            # Standard 2-leg OCO
+            trigger_values = [sl, target]
+            sell_orders = [
+                {"transaction_type": kite.TRANSACTION_TYPE_SELL, "quantity": qty, "order_type": kite.ORDER_TYPE_LIMIT, "product": product, "price": sl_limit},
+                {"transaction_type": kite.TRANSACTION_TYPE_SELL, "quantity": qty, "order_type": kite.ORDER_TYPE_LIMIT, "product": product, "price": target},
+            ]
 
         try:
             resp = kite.place_gtt(
@@ -222,26 +258,44 @@ def check_and_attach_oco(kite, verbose=False):
                 "avg_price": avg_price,
                 "target": target,
                 "sl": sl,
+                "t2": t2,
                 "timestamp": datetime.datetime.now().isoformat()
             }
             state["attached_ocos"] = attached
             save_state(state)
 
             # Send Telegram Alert
-            msg = (
-                f"🎉 <b>GTT BUY FILLED & OCO ATTACHED</b>\n"
-                f"──────────────────────────\n"
-                f"📦 <b>Stock:</b> {sym} ({exchange})\n"
-                f"• <b>Filled Qty:</b> {qty} shares @ ₹{avg_price:.2f}\n"
-                f"• <b>Product:</b> {product} Delivery\n"
-                f"──────────────────────────\n"
-                f"🛡️ <b>OCO PROTECTION ACTIVE:</b>\n"
-                f"• 🛑 <b>Stop Loss:</b> ₹{sl:.2f} ({((sl-avg_price)/avg_price*100):+.1f}%)\n"
-                f"• 🎯 <b>Target 1:</b>  ₹{target:.2f} ({((target-avg_price)/avg_price*100):+.1f}%)\n"
-                f"• 🆔 <b>GTT ID:</b>   #{gid}\n"
-                f"──────────────────────────\n"
-                f"✅ <i>Your position is 100% protected on Zerodha exchange servers!</i>"
-            )
+            if is_hero_zero:
+                msg = (
+                    f"🎉 <b>HERO ZERO GTT FILLED & 3-LEG OCO ATTACHED</b>\n"
+                    f"──────────────────────────\n"
+                    f"📦 <b>Symbol:</b> {sym} ({exchange})\n"
+                    f"• <b>Filled Qty:</b> {qty} shares @ ₹{avg_price:.2f}\n"
+                    f"• <b>Product:</b> {product}\n"
+                    f"──────────────────────────\n"
+                    f"🛡️ <b>3-LEG OCO PROTECTION ACTIVE:</b>\n"
+                    f"• 🛑 <b>Stop Loss:</b> ₹{sl:.2f} ({((sl-avg_price)/avg_price*100):+.1f}%)\n"
+                    f"• 🥇 <b>Target 1 (2x):</b> ₹{target:.2f} ({((target-avg_price)/avg_price*100):+.1f}%)\n"
+                    f"• 🚀 <b>Target 2 (4x):</b> ₹{t2:.2f} ({((t2-avg_price)/avg_price*100):+.1f}%)\n"
+                    f"• 🆔 <b>GTT ID:</b>   #{gid}\n"
+                    f"──────────────────────────\n"
+                    f"✅ <i>Your position is 100% protected on Zerodha exchange servers!</i>"
+                )
+            else:
+                msg = (
+                    f"🎉 <b>GTT BUY FILLED & OCO ATTACHED</b>\n"
+                    f"──────────────────────────\n"
+                    f"📦 <b>Stock:</b> {sym} ({exchange})\n"
+                    f"• <b>Filled Qty:</b> {qty} shares @ ₹{avg_price:.2f}\n"
+                    f"• <b>Product:</b> {product} Delivery\n"
+                    f"──────────────────────────\n"
+                    f"🛡️ <b>OCO PROTECTION ACTIVE:</b>\n"
+                    f"• 🛑 <b>Stop Loss:</b> ₹{sl:.2f} ({((sl-avg_price)/avg_price*100):+.1f}%)\n"
+                    f"• 🎯 <b>Target 1:</b>  ₹{target:.2f} ({((target-avg_price)/avg_price*100):+.1f}%)\n"
+                    f"• 🆔 <b>GTT ID:</b>   #{gid}\n"
+                    f"──────────────────────────\n"
+                    f"✅ <i>Your position is 100% protected on Zerodha exchange servers!</i>"
+                )
             send_telegram(msg)
         except Exception as ex:
             print(f"❌ Failed to attach OCO GTT for {sym}: {ex}")

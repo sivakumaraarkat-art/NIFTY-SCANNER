@@ -57,14 +57,19 @@ CRON_TZ=Asia/Kolkata
 # ==============================================================================
 # HERO-ZERO EXPIRY QUALITY SCANNERS & 3:50 PM SUMMARY (Delivered to @Nifty_stage10_paper_bot)
 # ==============================================================================
-# 10a. NIFTY Expiry Hero-Zero (Mondays & Tuesdays: Telegram Alerts at 14:00, 14:30, 15:00, 15:05, 15:10 | Automated Zerodha GTT ONLY at 14:30 and 15:05)
-00,30 14 * * 1,2 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py --force >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
-00,05,10 15 * * 1,2 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py --force >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
+# 10a. NIFTY Hero-Zero (Smart Wrapper: 2 scans/day on actual expiry days)
+# Schedule: 14:30, 15:05 (Mon-Fri) — Wrapper checks if today is actual NIFTY expiry day
+# NIFTY Expiry: Tuesday normally, Monday if Tuesday is holiday
+# GTT Deploy at both times: 14:30 (mid-session), 15:05 (peak gamma)
+30 14 * * 1-5 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_hero_zero_smart.py --symbol NIFTY >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
+05 15 * * 1-5 flock -w 60 /tmp/nifty_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_hero_zero_smart.py --symbol NIFTY >> /home/ubuntu/NiftyScanner/cron_logs/cron_nifty_hz.log 2>&1'
 
-# 10b. SENSEX Expiry Hero-Zero (Thursdays: Single optimal scan at 15:05 PM | Automated Zerodha GTT at 15:05)
-# Peak Gamma Surge Window: 15:05 - 15:25 (last 20 min before expiry settlement)
-# Previous: 5 scans (14:00, 14:30, 15:00, 15:05, 15:10) -> Now: 1 scan at 15:05
-05 15 * * 4 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py --min-prem 8.0 --max-prem 15.0 --lots 4 --capital 1500 --auto-gtt >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
+# 10b. SENSEX Hero-Zero (Smart Wrapper: 2 scans/day on actual expiry days)
+# Schedule: 14:30, 15:05 (Mon-Fri) — Wrapper checks if today is actual SENSEX expiry day
+# SENSEX Expiry: Thursday normally, Wednesday if Thursday is holiday
+# GTT Deploy: Wrapper passes --auto-gtt internally when expiry day matches
+30 14 * * 1-5 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_hero_zero_smart.py --symbol SENSEX --min-prem 8.0 --max-prem 15.0 --lots 4 --capital 1500 >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
+05 15 * * 1-5 flock -w 60 /tmp/sensex_hero_zero.lock bash -lc 'cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_hero_zero_smart.py --symbol SENSEX --min-prem 8.0 --max-prem 15.0 --lots 4 --capital 1500 >> /home/ubuntu/NiftyScanner/cron_logs/cron_sensex_hz.log 2>&1'
 
 # 10c. 03:50 PM Hero-Zero Expiry Final Settlement & Performance Summary (Mondays, Tuesdays & Thursdays to Telegram)
 50 15 * * 1,2,4 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/hero_zero_350pm_summary.py --force >> /home/ubuntu/NiftyScanner/cron_logs/cron_hero_zero_summary.log 2>&1
@@ -94,11 +99,16 @@ CRON_TZ=Asia/Kolkata
 30 09 * * 1 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_weekly_10pct_breakout_scan.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_weekly_breakout.log 2>&1
 
 # ==============================================================================
-# 14c. AUTOMATED GTT FILL & OCO PROTECTION SENTINEL (CONCORDBIO & GALLANTT)
+# 14c. AUTOMATED GTT FILL & OCO PROTECTION SENTINEL (CONCORDBIO, GALLANTT + HERO ZERO)
 # ==============================================================================
 # Runs every 2 min from 09:16 to 10:30 AM (Mon-Fri): Auto-detects GTT fill & attaches OCO Exit
 16-58/2 09 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel.log 2>&1
 00-30/2 10 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel.log 2>&1
+
+# Hero Zero GTT Fill Sentinel - runs at Hero Zero scan times to catch fills & attach 3-leg OCO
+# Runs at 14:32, 15:07 (2 min after Hero Zero scans at 14:30, 15:05)
+32 14 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel_hero.log 2>&1
+07 15 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron >> /home/ubuntu/NiftyScanner/cron_logs/cron_gtt_sentinel_hero.log 2>&1
 
 # ==============================================================================
 # 14d. WEEKEND BACKTEST ENGINE & SATURDAY TOKEN REFRESH (SATURDAY 10:00 AM)
