@@ -828,8 +828,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-score",
         type=int,
+        default=90,
+        help="Minimum combined score to qualify (0-100, default: 90 for high conviction)",
+    )
+    parser.add_argument(
+        "--fallback-score",
+        type=int,
         default=85,
-        help="Minimum combined score to qualify (0-100, default: 85 for high conviction)",
+        help="Fallback minimum score if insufficient candidates at min-score (default: 85)",
     )
     parser.add_argument(
         "--account-size",
@@ -840,8 +846,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-daily-trades",
         type=int,
-        default=10,
-        help="Maximum total intraday option trades allowed per day across all scans (default: 10, strictly capped)",
+        default=12,
+        help="Maximum total intraday option trades allowed per day across all scans (default: 12, strictly capped)",
     )
     parser.add_argument(
         "--max-trades-per-scan",
@@ -1037,15 +1043,15 @@ def main():
         min_score=args.min_score,
     )
 
-    # Guarantee 2 strikes per run: If fewer than scan_limit (2) qualify at min_score, fallback to top candidates
+    # Guarantee 2 strikes per run: If fewer than scan_limit (2) qualify at min_score, fallback to fallback_score
     if len(resolved) < scan_limit and candidates_input:
-        print(f"[*] Fallback activated: Only {len(resolved)} candidate(s) met score >={args.min_score}. Lowering threshold to ensure {scan_limit} strikes are provided...")
+        print(f"[*] Fallback activated: Only {len(resolved)} candidate(s) met score >={args.min_score}. Lowering threshold to fallback score {args.fallback_score} to ensure {scan_limit} strikes are provided...")
         fallback_resolved = resolve_all_candidates(
             candidates_input,
             is_btst=False,
             include_nifty=False,
             account_size=args.account_size,
-            min_score=max(65, args.min_score - 15),
+            min_score=args.fallback_score,
         )
         resolved_syms = {r.get("option_symbol") for r in resolved}
         for r in fallback_resolved:

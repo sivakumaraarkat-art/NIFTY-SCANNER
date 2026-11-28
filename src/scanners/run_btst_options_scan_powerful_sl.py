@@ -399,6 +399,12 @@ def parse_args() -> argparse.Namespace:
         help="Minimum combined score to qualify (0-100, default: 90 for elite conviction)",
     )
     parser.add_argument(
+        "--fallback-score",
+        type=int,
+        default=85,
+        help="Fallback minimum score if insufficient candidates at min-score (default: 85)",
+    )
+    parser.add_argument(
         "--account-size",
         type=float,
         default=500000,
@@ -568,15 +574,15 @@ def main():
         c['potential_profit_t1'] = round(tot_qty * (c['t1'] - c['entry_price']), 2)
         c['potential_profit_t2'] = round(tot_qty * (c['t2'] - c['entry_price']), 2)
 
-    # Guarantee 2 strikes for BTST: If fewer than 2 qualify at min_score, fallback to top candidates
+    # Guarantee 2 strikes for BTST: If fewer than 2 qualify at min_score, fallback to fallback_score
     if len(stock_candidates) + len(index_candidates) < 2 and candidates_input:
-        print(f"[*] Fallback activated: Only {len(stock_candidates) + len(index_candidates)} candidate(s) qualified at BTST score >={args.min_score}. Lowering threshold to ensure 2 strikes are delivered...")
+        print(f"[*] Fallback activated: Only {len(stock_candidates) + len(index_candidates)} candidate(s) qualified at BTST score >={args.min_score}. Lowering threshold to fallback score {args.fallback_score} to ensure 2 strikes are delivered...")
         fallback_resolved = resolve_all_candidates(
             candidates_input,
             is_btst=True,
             include_nifty=args.include_nifty,
             account_size=args.account_size,
-            min_score=max(75, args.min_score - 10),
+            min_score=args.fallback_score,
             min_dte=20,
         )
         existing_keys = {c.get("option_symbol") for c in stock_candidates + index_candidates}
