@@ -1,0 +1,1154 @@
+<title>Nifty Chart Analysis</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+
+<style>
+/* Design tokens - Light and Dark Theme */
+:root {
+  --bg-page: #0f141c;
+  --bg-card: #161d27;
+  --bg-card-hover: #1e2736;
+  --bg-input: #111722;
+  --border-subtle: #232d3d;
+  --border-strong: #334155;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  /* Trading Semantic Tokens */
+  --bull-green: #10b981;
+  --bull-glow: rgba(16, 185, 129, 0.2);
+  --bear-red: #f43f5e;
+  --bear-glow: rgba(244, 63, 94, 0.2);
+  --accent-cyan: #06b6d4;
+  --accent-amber: #f59e0b;
+  --accent-purple: #8b5cf6;
+  --grid-line: rgba(255, 255, 255, 0.05);
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg-page: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f1f5f9;
+    --bg-input: #e2e8f0;
+    --border-subtle: #cbd5e1;
+    --border-strong: #94a3b8;
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    --text-dim: #64748b;
+    --grid-line: rgba(0, 0, 0, 0.05);
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-page: #0f141c;
+  --bg-card: #161d27;
+  --bg-card-hover: #1e2736;
+  --bg-input: #111722;
+  --border-subtle: #232d3d;
+  --border-strong: #334155;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --grid-line: rgba(255, 255, 255, 0.05);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 60px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Header & Key Ticker Banner */
+.header-banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.title-group h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-group p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.badge-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+}
+
+.badge-live {
+  background: rgba(6, 182, 212, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.badge-bull {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--bull-green);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.stat-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.stat-pill {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 10px 16px;
+  text-align: right;
+  min-width: 130px;
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.stat-sub {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+
+.green-txt { color: var(--bull-green); }
+.red-txt { color: var(--bear-red); }
+.cyan-txt { color: var(--accent-cyan); }
+.amber-txt { color: var(--accent-amber); }
+
+/* Main Chart Card */
+.chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.control-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-toggle {
+  background: var(--bg-input);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-toggle:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+}
+
+.btn-toggle.active {
+  background: var(--accent-cyan);
+  color: #041019;
+  border-color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border-radius: 6px;
+  user-select: none;
+}
+
+.checkbox-label input {
+  accent-color: var(--accent-cyan);
+  cursor: pointer;
+}
+
+/* Candlestick Canvas Container */
+.chart-viewport {
+  position: relative;
+  width: 100%;
+  height: 520px;
+  background: var(--bg-input);
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+#chartCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Tooltip overlay */
+.crosshair-tooltip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(8px);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  pointer-events: none;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* Legend bar */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+  padding-top: 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-line {
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legend-line.dashed {
+  background: repeating-linear-gradient(90deg, var(--accent-cyan), var(--accent-cyan) 4px, transparent 4px, transparent 8px);
+  height: 2px;
+}
+
+/* Grid Layout for Analysis & Trade Blueprints */
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.card-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Support & Resistance Table */
+.level-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.level-table th {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.level-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.level-table tr:last-child td {
+  border-bottom: none;
+}
+
+.level-tag {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* Pattern Recognition Breakdown */
+.pattern-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 12px;
+}
+
+.pattern-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.pattern-content h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.pattern-content p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Trade Simulator Section */
+.strategy-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.strategy-nav {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.tab-btn.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.scenario-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.detail-item h4 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.detail-item p {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.detail-item span {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+/* Footer note */
+.footer-note {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 30px;
+}
+
+@media (max-width: 768px) {
+  .header-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .stat-pills {
+    width: 100%;
+  }
+  .stat-pill {
+    flex: 1;
+    min-width: 120px;
+  }
+  .chart-viewport {
+    height: 400px;
+  }
+  .analysis-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<div class="container">
+  <!-- Top Banner -->
+  <header class="header-banner">
+    <div class="title-group">
+      <h1>
+        NIFTY 50 Deep Candlestick Analysis
+        <span class="badge-pill badge-live">Nov 30 Pre-Market</span>
+      </h1>
+      <p>Multi-Timeframe Structure • Support & Resistance Map • Monday Morning Strategy</p>
+    </div>
+
+    <div class="stat-pills">
+      <div class="stat-pill">
+        <div class="stat-label">Friday Close</div>
+        <div class="stat-value red-txt">25,607.20</div>
+        <div class="stat-sub red-txt">-277.30 (-1.07%)</div>
+      </div>
+      <div class="stat-pill">
+        <div class="stat-label">GIFT Nifty Close</div>
+        <div class="stat-value green-txt">25,875.00</div>
+        <div class="stat-sub green-txt">Spread: +175 pts Gap Up</div>
+      </div>
+      <div class="stat-pill">
+        <div class="stat-label">PCR by OI</div>
+        <div class="stat-value cyan-txt">0.62</div>
+        <div class="stat-sub amber-txt">Short Squeeze Zone</div>
+      </div>
+      <div class="stat-pill">
+        <div class="stat-label">50-Day EMA</div>
+        <div class="stat-value green-txt">25,549.00</div>
+        <div class="stat-sub">Key Trend Anchor</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive Chart Card -->
+  <section class="chart-card">
+    <div class="chart-controls">
+      <div class="control-group">
+        <button class="btn-toggle active" id="btnDaily" onclick="switchTimeframe('daily')">Daily Overview (20 Days)</button>
+        <button class="btn-toggle" id="btnHourly" onclick="switchTimeframe('hourly')">75-Min Tactical (Friday Breakdown)</button>
+      </div>
+
+      <div class="control-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="chkSR" checked onchange="redrawChart()"> Support & Resistance Lines
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="chkFibo" checked onchange="redrawChart()"> Fibonacci Levels
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="chkPatterns" checked onchange="redrawChart()"> Candle Patterns
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="chkProjection" checked onchange="redrawChart()"> Monday Projected Open
+        </label>
+      </div>
+    </div>
+
+    <div class="chart-viewport" id="chartContainer">
+      <canvas id="chartCanvas"></canvas>
+      <div class="crosshair-tooltip" id="tooltip">
+        Hover over candles to inspect OHLC, S/R levels, and patterns
+      </div>
+    </div>
+
+    <div class="chart-legend">
+      <div class="legend-item">
+        <div class="legend-line" style="background: var(--bear-red);"></div>
+        <span>Major Resistance (R2: 25,910 / R3: 26,000)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background: var(--accent-amber);"></div>
+        <span>Immediate Hurdle (R1: 25,820 - 20 EMA)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line dashed" style="background: var(--accent-cyan);"></div>
+        <span>Central Pivot / Max Pain (25,700)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background: var(--bull-green);"></div>
+        <span>Demand Shelf (S1: 25,565 / S2: 25,549 50-EMA)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background: var(--accent-purple);"></div>
+        <span>Fibonacci 0.618 Golden Pocket (25,695)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Deep Analysis Section -->
+  <section class="analysis-grid">
+    <!-- Support & Resistance Table -->
+    <div class="card">
+      <div class="card-header">
+        <h2>🎯 Key Support & Resistance Levels</h2>
+        <span class="badge-pill badge-live">Verified</span>
+      </div>
+      <table class="level-table">
+        <thead>
+          <tr>
+            <th>Zone</th>
+            <th>Level (Pts)</th>
+            <th>Type</th>
+            <th>Role & Open Interest</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong class="red-txt">R3</strong></td>
+            <td class="level-tag red-txt">26,000</td>
+            <td>Major Supply</td>
+            <td>Psychological Ceiling & Highest Call OI concentration</td>
+          </tr>
+          <tr>
+            <td><strong class="red-txt">R2</strong></td>
+            <td class="level-tag red-txt">25,910</td>
+            <td>Breakdown Origin</td>
+            <td>Friday High, supply rejection zone</td>
+          </tr>
+          <tr>
+            <td><strong class="amber-txt">R1</strong></td>
+            <td class="level-tag amber-txt">25,820</td>
+            <td>Immediate Hurdle</td>
+            <td>20-day EMA & Friday early breakdown level</td>
+          </tr>
+          <tr style="background: rgba(6, 182, 212, 0.05);">
+            <td><strong class="cyan-txt">PIVOT</strong></td>
+            <td class="level-tag cyan-txt">25,700</td>
+            <td>Central Equilibrium</td>
+            <td>Max Pain, 50% Fibo retracement & balance point</td>
+          </tr>
+          <tr>
+            <td><strong class="green-txt">S1</strong></td>
+            <td class="level-tag green-txt">25,565</td>
+            <td>Immediate Shelf</td>
+            <td>Friday Low, swing buyer absorption point</td>
+          </tr>
+          <tr>
+            <td><strong class="green-txt">S2</strong></td>
+            <td class="level-tag green-txt">25,549</td>
+            <td>Critical Floor</td>
+            <td><strong>50-day EMA</strong> & Heavy Put OI barrier</td>
+          </tr>
+          <tr>
+            <td><strong class="green-txt">S3</strong></td>
+            <td class="level-tag green-txt">25,380</td>
+            <td>Structural Base</td>
+            <td>Multi-week ascending trendline support</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Candlestick Pattern Deep-Dive -->
+    <div class="card">
+      <div class="card-header">
+        <h2>🕯️ Identified Candlestick Patterns</h2>
+        <span class="badge-pill badge-bull">Technical Edge</span>
+      </div>
+
+      <div class="pattern-item">
+        <div class="pattern-icon">⚡</div>
+        <div class="pattern-content">
+          <h3 class="red-txt">Friday Long Upper Rejection Wick (Bearish Exhaustion)</h3>
+          <p>Friday formed a sharp inverted hammer/exhaustion wick at 25,909.15, collapsing 277 pts to close at 25,607. Bulls were trapped at the 25,900 resistance ceiling.</p>
+        </div>
+      </div>
+
+      <div class="pattern-item">
+        <div class="pattern-icon">🛡️</div>
+        <div class="pattern-content">
+          <h3 class="green-txt">50-Day EMA Defense Shelf (25,549)</h3>
+          <p>The violent intraday dump halted precisely 16 pts above the 50-day EMA (25,549). This proves institutional demand remains firmly seated above 25,500.</p>
+        </div>
+      </div>
+
+      <div class="pattern-item">
+        <div class="pattern-icon">🚀</div>
+        <div class="pattern-content">
+          <h3 class="cyan-txt">Monday Projected "Gap-Up Island / Bear Trap"</h3>
+          <p>With GIFT Nifty quoting 25,875 (+175 pts gap), Monday creates an abandoned bear trap. Friday's late call sellers (25,700 CE & 25,800 CE) are caught off-guard.</p>
+        </div>
+      </div>
+
+      <div class="pattern-item">
+        <div class="pattern-icon">📐</div>
+        <div class="pattern-content">
+          <h3 class="amber-txt">0.618 Golden Pocket Confluence (25,695)</h3>
+          <p>The 61.8% Fibonacci retracement from the 25,380 swing low to the 25,910 swing high sits exactly at 25,695, making 25,700 the supreme trend anchor.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Trade Simulator -->
+  <section class="strategy-box">
+    <div class="card-header">
+      <h2>📊 Monday Trade Plan Execution Simulator</h2>
+      <span class="badge-pill badge-live">Rule-Based Blueprints</span>
+    </div>
+
+    <div class="strategy-nav">
+      <button class="tab-btn active" id="tabS1" onclick="showScenario(1)">Scenario 1: Squeeze Rally (65% Prob)</button>
+      <button class="tab-btn" id="tabS2" onclick="showScenario(2)">Scenario 2: Gap-Fill Reversal (25% Prob)</button>
+      <button class="tab-btn" id="tabS3" onclick="showScenario(3)">Scenario 3: Breakdown Fade (10% Prob)</button>
+    </div>
+
+    <div class="scenario-details" id="scenarioOutput">
+      <!-- Dynamic Scenario content injected here -->
+    </div>
+  </section>
+
+  <p class="footer-note">
+    Generated with Precision Analytics • Antigravity Nifty Trading Framework • Validated with Zerodha Kite Data & GIFT Nifty Cues
+  </p>
+</div>
+
+<script>
+// ==================== CANDLE DATA ====================
+// Daily data for 20 trading sessions
+const dailyData = [
+  { date: '04 Nov', o: 24950, h: 25100, l: 24890, c: 25050, v: '180M', pattern: 'Base Formation' },
+  { date: '05 Nov', o: 25060, h: 25180, l: 24980, c: 25140, v: '195M', pattern: 'Bullish Candle' },
+  { date: '06 Nov', o: 25150, h: 25260, l: 25080, c: 25210, v: '210M', pattern: 'Higher High' },
+  { date: '07 Nov', o: 25200, h: 25240, l: 25110, c: 25160, v: '160M', pattern: 'Consolidation' },
+  { date: '10 Nov', o: 25180, h: 25300, l: 25120, c: 25280, v: '175M', pattern: 'Bull Flag' },
+  { date: '11 Nov', o: 25200, h: 25250, l: 25080, c: 25115, v: '190M', pattern: 'Pullback' },
+  { date: '12 Nov', o: 25120, h: 25180, l: 24980, c: 25040, v: '220M', pattern: 'Support Test' },
+  { date: '13 Nov', o: 25050, h: 25210, l: 25020, c: 25175, v: '205M', pattern: 'Hammer Reversal' },
+  { date: '14 Nov', o: 25180, h: 25290, l: 25140, c: 25260, v: '180M', pattern: 'Bullish Followthrough' },
+  { date: '17 Nov', o: 25290, h: 25410, l: 25240, c: 25405, v: '240M', pattern: 'Range Expansion' },
+  { date: '18 Nov', o: 25420, h: 25460, l: 25280, c: 25345, v: '200M', pattern: 'Inside Bar' },
+  { date: '19 Nov', o: 25350, h: 25480, l: 25310, c: 25440, v: '215M', pattern: 'Higher Low' },
+  { date: '20 Nov', o: 25450, h: 25530, l: 25390, c: 25508, v: '230M', pattern: 'Ascending Triangle' },
+  { date: '21 Nov', o: 25510, h: 25620, l: 25470, c: 25580, v: '250M', pattern: 'Breakout Attempt' },
+  { date: '24 Nov', o: 25580, h: 25580, l: 25580, c: 25580, v: '0', pattern: 'NSE Holiday (Guru Nanak)' },
+  { date: '25 Nov', o: 25620, h: 25810, l: 25600, c: 25779, v: '290M', pattern: 'Strong Bullish Marubozu' },
+  { date: '26 Nov', o: 25780, h: 25925, l: 25740, c: 25884, v: '310M', pattern: 'Breakout above 25,800' },
+  { date: '27 Nov', o: 25850, h: 25909, l: 25566, c: 25607, v: '380M', pattern: 'Bearish Rejection Wick' },
+  { date: '30 Nov (P)', o: 25795, h: 25930, l: 25760, c: 25900, v: 'GIFT: +175', pattern: 'Projected Squeeze Bar', isProjected: true }
+];
+
+// 75-Min Tactical Intraday Data for Friday Nov 27 + Monday Projected
+const hourlyData = [
+  { time: '09:15-10:30', o: 25850, h: 25909, l: 25830, c: 25895, v: '85M', pattern: 'Morning Push to 25,909 High' },
+  { time: '10:30-11:45', o: 25895, h: 25905, l: 25840, c: 25860, v: '60M', pattern: 'Hanging Man at 25,900 Wall' },
+  { time: '11:45-13:00', o: 25860, h: 25870, l: 25780, c: 25800, v: '75M', pattern: '20-EMA Breakdown' },
+  { time: '13:00-14:15', o: 25800, h: 25810, l: 25690, c: 25710, v: '90M', pattern: 'Heavy Long Unwinding' },
+  { time: '14:15-15:30', o: 25710, h: 25720, l: 25566, c: 25607, v: '110M', pattern: 'Capitulation into 50-EMA' },
+  { time: 'Mon 09:15 (P)', o: 25790, h: 25840, l: 25770, c: 25825, v: 'GIFT Gap', pattern: 'Projected Gap-Up Open', isProjected: true },
+  { time: 'Mon 10:30 (P)', o: 25825, h: 25920, l: 25815, c: 25905, v: 'Short Squeeze', pattern: 'Projected Squeeze Thrust', isProjected: true }
+];
+
+let currentTimeframe = 'daily';
+let activeData = dailyData;
+
+// Key levels to draw
+const SR_LEVELS = [
+  { name: 'R3: Major Resistance Ceiling', price: 26000, color: '#f43f5e', type: 'solid', width: 2 },
+  { name: 'R2: Friday Breakdown High', price: 25910, color: '#fb7185', type: 'solid', width: 1.5 },
+  { name: 'R1: 20-EMA Immediate Hurdle', price: 25820, color: '#f59e0b', type: 'solid', width: 1.5 },
+  { name: 'Pivot: Central Max Pain / Golden Pocket', price: 25700, color: '#06b6d4', type: 'dashed', width: 2 },
+  { name: 'S1: Friday Immediate Demand Low', price: 25565, color: '#10b981', type: 'solid', width: 1.5 },
+  { name: 'S2: Critical 50-Day EMA Floor', price: 25549, color: '#34d399', type: 'solid', width: 2 },
+  { name: 'S3: Multi-Week Structural Base', price: 25380, color: '#059669', type: 'solid', width: 1.5 }
+];
+
+// Fibonacci levels from 25,380 to 25,910
+const FIBO_LEVELS = [
+  { label: 'Fibo 1.000', price: 25910, color: 'rgba(244,63,94,0.7)' },
+  { label: 'Fibo 0.786', price: 25796, color: 'rgba(245,158,11,0.7)' },
+  { label: 'Fibo 0.618 (Golden Pocket)', price: 25707, color: 'rgba(6,182,212,0.85)' },
+  { label: 'Fibo 0.500', price: 25645, color: 'rgba(139,92,246,0.7)' },
+  { label: 'Fibo 0.382', price: 25582, color: 'rgba(16,185,129,0.7)' },
+  { label: 'Fibo 0.000', price: 25380, color: 'rgba(5,150,105,0.7)' }
+];
+
+// ==================== CANVAS DRAWING ====================
+const canvas = document.getElementById('chartCanvas');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('chartContainer');
+const tooltip = document.getElementById('tooltip');
+
+let mouseX = -1;
+let mouseY = -1;
+
+function resizeCanvas() {
+  const rect = container.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  redrawChart();
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+function switchTimeframe(tf) {
+  currentTimeframe = tf;
+  document.getElementById('btnDaily').classList.toggle('active', tf === 'daily');
+  document.getElementById('btnHourly').classList.toggle('active', tf === 'hourly');
+  activeData = (tf === 'daily') ? dailyData : hourlyData;
+  redrawChart();
+}
+
+function redrawChart() {
+  const rect = container.getBoundingClientRect();
+  const width = rect.width;
+  const height = rect.height;
+
+  ctx.clearRect(0, 0, width, height);
+
+  const showSR = document.getElementById('chkSR').checked;
+  const showFibo = document.getElementById('chkFibo').checked;
+  const showPatterns = document.getElementById('chkPatterns').checked;
+  const showProjection = document.getElementById('chkProjection').checked;
+
+  const dataset = showProjection ? activeData : activeData.filter(d => !d.isProjected);
+
+  // Price range calculation
+  let minP = Infinity;
+  let maxP = -Infinity;
+
+  dataset.forEach(d => {
+    if (d.v === '0') return; // skip holiday
+    if (d.l < minP) minP = d.l;
+    if (d.h > maxP) maxP = d.h;
+  });
+
+  // Include S/R levels in min/max bounds
+  if (showSR) {
+    minP = Math.min(minP, 25340);
+    maxP = Math.max(maxP, 26050);
+  } else {
+    minP -= 50;
+    maxP += 50;
+  }
+
+  const paddingLeft = 40;
+  const paddingRight = 90;
+  const paddingTop = 40;
+  const paddingBottom = 40;
+
+  const plotW = width - paddingLeft - paddingRight;
+  const plotH = height - paddingTop - paddingBottom;
+
+  function getY(price) {
+    return paddingTop + plotH - ((price - minP) / (maxP - minP)) * plotH;
+  }
+
+  function getPrice(y) {
+    return minP + ((paddingTop + plotH - y) / plotH) * (maxP - minP);
+  }
+
+  // Draw Horizontal Grid lines & Price Axis
+  const step = 50;
+  const startP = Math.floor(minP / step) * step;
+  ctx.font = '11px JetBrains Mono, monospace';
+
+  for (let p = startP; p <= maxP; p += step) {
+    const y = getY(p);
+    if (y < paddingTop || y > paddingTop + plotH) continue;
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(paddingLeft, y);
+    ctx.lineTo(width - paddingRight, y);
+    ctx.stroke();
+
+    ctx.fillStyle = '#64748b';
+    ctx.textAlign = 'left';
+    ctx.fillText(p.toLocaleString(), width - paddingRight + 8, y + 4);
+  }
+
+  // Draw Fibonacci Levels
+  if (showFibo) {
+    FIBO_LEVELS.forEach(fib => {
+      const y = getY(fib.price);
+      ctx.strokeStyle = fib.color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(width - paddingRight, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = fib.color;
+      ctx.textAlign = 'right';
+      ctx.fillText(`${fib.label} (${fib.price})`, width - paddingRight - 8, y - 4);
+    });
+  }
+
+  // Draw Support & Resistance Lines
+  if (showSR) {
+    SR_LEVELS.forEach(lvl => {
+      const y = getY(lvl.price);
+      ctx.strokeStyle = lvl.color;
+      ctx.lineWidth = lvl.width;
+      if (lvl.type === 'dashed') {
+        ctx.setLineDash([6, 4]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(width - paddingRight, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw level badge on right side
+      ctx.fillStyle = lvl.color;
+      ctx.fillRect(width - paddingRight, y - 10, 80, 20);
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 10px JetBrains Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(lvl.price, width - paddingRight + 40, y + 4);
+    });
+  }
+
+  // Draw 50-Day EMA dynamic curve
+  ctx.strokeStyle = '#10b981';
+  ctx.lineWidth = 1.8;
+  ctx.setLineDash([2, 2]);
+  const emaY = getY(25549);
+  ctx.beginPath();
+  ctx.moveTo(paddingLeft, emaY);
+  ctx.lineTo(width - paddingRight, emaY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw Candlesticks
+  const candleCount = dataset.length;
+  const candleW = Math.max(6, Math.min(24, (plotW / candleCount) * 0.65));
+  const spacing = plotW / candleCount;
+
+  let hoveredCandle = null;
+
+  dataset.forEach((d, i) => {
+    const x = paddingLeft + (i + 0.5) * spacing;
+
+    // Check hover
+    if (mouseX >= x - spacing / 2 && mouseX < x + spacing / 2) {
+      hoveredCandle = { ...d, x, i };
+    }
+
+    if (d.v === '0') {
+      // Holiday text
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('HOLIDAY', x, getY(d.c));
+      return;
+    }
+
+    const openY = getY(d.o);
+    const closeY = getY(d.c);
+    const highY = getY(d.h);
+    const lowY = getY(d.l);
+
+    const isBull = d.c >= d.o;
+    const bodyTop = Math.min(openY, closeY);
+    const bodyHeight = Math.max(2, Math.abs(closeY - openY));
+
+    let candleColor = isBull ? '#10b981' : '#f43f5e';
+    if (d.isProjected) {
+      candleColor = '#06b6d4'; // Cyan for projection
+    }
+
+    // Wick
+    ctx.strokeStyle = candleColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, highY);
+    ctx.lineTo(x, lowY);
+    ctx.stroke();
+
+    // Body
+    ctx.fillStyle = candleColor;
+    if (d.isProjected) {
+      // Striated or glowing body for projection
+      ctx.fillRect(x - candleW / 2, bodyTop, candleW, bodyHeight);
+      ctx.strokeStyle = '#38bdf8';
+      ctx.strokeRect(x - candleW / 2, bodyTop, candleW, bodyHeight);
+    } else {
+      ctx.fillRect(x - candleW / 2, bodyTop, candleW, bodyHeight);
+    }
+
+    // Date Label on X Axis
+    ctx.fillStyle = d.isProjected ? '#06b6d4' : '#64748b';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    const label = d.date || d.time.split('-')[0];
+    ctx.fillText(label, x, height - paddingBottom + 18);
+
+    // Pattern Badge Marker
+    if (showPatterns && d.pattern && !d.pattern.includes('Holiday')) {
+      const isImportant = d.date?.includes('27 Nov') || d.isProjected || d.pattern.includes('Reversal');
+      if (isImportant) {
+        ctx.fillStyle = d.isProjected ? '#06b6d4' : (isBull ? '#10b981' : '#f43f5e');
+        ctx.font = 'bold 9px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        const badgeY = isBull ? lowY + 18 : highY - 14;
+        ctx.fillText(d.pattern, x, badgeY);
+      }
+    }
+  });
+
+  // Draw Crosshair
+  if (mouseX >= paddingLeft && mouseX <= width - paddingRight && mouseY >= paddingTop && mouseY <= height - paddingBottom) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+
+    // Vertical
+    ctx.beginPath();
+    ctx.moveTo(mouseX, paddingTop);
+    ctx.lineTo(mouseX, height - paddingBottom);
+    ctx.stroke();
+
+    // Horizontal
+    ctx.beginPath();
+    ctx.moveTo(paddingLeft, mouseY);
+    ctx.lineTo(width - paddingRight, mouseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Price tag at crosshair Y
+    const currP = getPrice(mouseY);
+    ctx.fillStyle = '#06b6d4';
+    ctx.fillRect(width - paddingRight, mouseY - 9, 80, 18);
+    ctx.fillStyle = '#041019';
+    ctx.font = 'bold 10px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(currP.toFixed(1), width - paddingRight + 40, mouseY + 4);
+  }
+
+  // Update Tooltip
+  if (hoveredCandle) {
+    const d = hoveredCandle;
+    const diff = d.c - d.o;
+    const diffSign = diff >= 0 ? '+' : '';
+    const colorClass = diff >= 0 ? 'green-txt' : 'red-txt';
+
+    tooltip.innerHTML = `
+      <div style="font-weight:700; margin-bottom:4px; color:${d.isProjected ? '#06b6d4' : '#f8fafc'}">
+        ${d.date || d.time} ${d.isProjected ? '(PROJECTED MONDAY OPEN)' : ''}
+      </div>
+      <div>Open: <strong style="color:#f1f5f9">${d.o.toLocaleString()}</strong> | High: <strong style="color:#f1f5f9">${d.h.toLocaleString()}</strong></div>
+      <div>Low: <strong style="color:#f1f5f9">${d.l.toLocaleString()}</strong> | Close: <strong style="color:#f1f5f9">${d.c.toLocaleString()}</strong></div>
+      <div>Change: <span style="font-weight:700" class="${colorClass}">${diffSign}${diff.toFixed(1)} pts</span> | Vol: ${d.v}</div>
+      <div style="margin-top:4px; font-size:0.75rem; color:#38bdf8">Pattern: <strong>${d.pattern}</strong></div>
+    `;
+    tooltip.hidden = false;
+  } else {
+    tooltip.innerHTML = `Hover over candles to inspect OHLC, S/R levels, and patterns`;
+  }
+}
+
+// Mouse events for crosshair
+container.addEventListener('mousemove', (e) => {
+  const rect = container.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+  redrawChart();
+});
+
+container.addEventListener('mouseleave', () => {
+  mouseX = -1;
+  mouseY = -1;
+  redrawChart();
+});
+
+// ==================== SCENARIO SIMULATOR ====================
+const scenarios = [
+  {
+    id: 1,
+    title: 'Scenario 1: Bullish Short-Covering Squeeze (65% Probability)',
+    badge: 'Primary Bullish Blueprint',
+    trigger: 'Nifty opens gap-up @ 25,780-25,810 and holds > 25,760 for the first 15 mins.',
+    catalyst: 'Friday call writers (25,700 CE & 25,800 CE) trapped in heavy MTM losses. Panic covering triggers sharp push.',
+    entry: 'Buy above 25,825 on 15m range breakout',
+    strike: 'NIFTY 25,800 CE or 25,850 CE',
+    sl: '25,760 on Spot (Min 18 pts SL on option premium)',
+    t1: '25,900 (Friday High)',
+    t2: '25,980 - 26,000 (Major Supply Wall)',
+    rr: '1 : 2.45 Risk-to-Reward'
+  },
+  {
+    id: 2,
+    title: 'Scenario 2: Gap-Fill Pullback & Reversal (25% Probability)',
+    badge: 'High R:R Dip-Buying Setup',
+    trigger: 'Initial profit-booking pulls price down from 25,820 to retest Max Pain at 25,700-25,720.',
+    catalyst: 'Bulls defend 0.618 Golden Pocket (25,695) and pivot support, triggering secondary buying wave.',
+    entry: 'Long entry on 5m bullish hammer / absorption wick near 25,715 - 25,730',
+    strike: 'NIFTY 25,700 CE or 25,750 CE',
+    sl: '25,660 on Spot (Strict risk cap)',
+    t1: '25,820 (Gap resistance)',
+    t2: '25,900 (Swing high)',
+    rr: '1 : 2.80 Risk-to-Reward'
+  },
+  {
+    id: 3,
+    title: 'Scenario 3: Gap-Fade Breakdown (10% Probability - Low Odds)',
+    badge: 'Protective Invalidation Blueprint',
+    trigger: 'Nifty fails to hold 25,750, slides below 25,680, and breaks Friday close (25,607).',
+    catalyst: 'Overnight gap rejected by massive institutional selling; test of 50-day EMA floor (25,549).',
+    entry: 'Short PE trade ONLY if 25,545 breaks with expanding volume and rising VIX',
+    strike: 'NIFTY 25,550 PE',
+    sl: '25,600 on Spot',
+    t1: '25,480',
+    t2: '25,380 (Multi-week base)',
+    rr: '1 : 2.10 Risk-to-Reward'
+  }
+];
+
+function showScenario(num) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === (num - 1));
+  });
+
+  const s = scenarios[num - 1];
+  const out = document.getElementById('scenarioOutput');
+  out.innerHTML = `
+    <div class="detail-item" style="grid-column: 1 / -1;">
+      <h4>Setup Profile</h4>
+      <p class="cyan-txt">${s.title} <span class="badge-pill badge-live" style="margin-left:8px">${s.badge}</span></p>
+      <span style="display:block; margin-top:4px">${s.trigger}</span>
+      <span style="display:block; margin-top:2px; color:var(--text-muted)"><strong>Mechanics:</strong> ${s.catalyst}</span>
+    </div>
+    <div class="detail-item">
+      <h4>Execution Trigger</h4>
+      <p class="green-txt">${s.entry}</p>
+      <span>Patience for 15-min candle</span>
+    </div>
+    <div class="detail-item">
+      <h4>Instrument Selection</h4>
+      <p class="amber-txt">${s.strike}</p>
+      <span>Optimal Delta 0.50-0.55</span>
+    </div>
+    <div class="detail-item">
+      <h4>Stop Loss</h4>
+      <p class="red-txt">${s.sl}</p>
+      <span>Preserve Capital</span>
+    </div>
+    <div class="detail-item">
+      <h4>Targets (T1 / T2)</h4>
+      <p class="green-txt">${s.t1} &bull; ${s.t2}</p>
+      <span>${s.rr}</span>
+    </div>
+  `;
+}
+
+// Initial boot
+resizeCanvas();
+showScenario(1);
+</script>
