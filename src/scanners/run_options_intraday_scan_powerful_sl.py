@@ -1059,6 +1059,41 @@ def main():
         print("\n⚠️ No qualified option candidates found matching the score criteria.")
         return
 
+    # ─── INTRADAY IMPROVEMENTS ───
+    # Apply additional quality filters after resolution
+    filtered_resolved = []
+    for c in resolved:
+        # DTE validation: reject if DTE < 3 for intraday (gamma risk)
+        dte = c.get('dte', 0)
+        if dte < 3 and c.get('symbol') not in ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']:
+            print(f"⚠️ SKIPPED {c['symbol']}: DTE={dte} < 3 for intraday. High gamma risk.")
+            continue
+
+        # Delta validation: require 0.25-0.55 for good risk/reward
+        delta = c.get('delta', 0)
+        if not (0.25 <= abs(delta) <= 0.55):
+            print(f"⚠️ SKIPPED {c['symbol']}: delta={delta:.2f} outside 0.25-0.55 range.")
+            continue
+
+        # IV percentile check (placeholder - would need historical data)
+        # iv = c.get('iv', 0)
+        # if iv > 90:  # 90th percentile
+        #     print(f"⚠️ SKIPPED {c['symbol']}: IV={iv}% > 90th percentile.")
+        #     continue
+
+        # Volume check (500k minimum for intraday liquidity)
+        vol = c.get('volume', 0)
+        if vol > 0 and vol < 500000 and c.get('symbol') not in ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']:
+            print(f"⚠️ SKIPPED {c['symbol']}: volume={vol} < 500k for intraday.")
+            continue
+
+        filtered_resolved.append(c)
+
+    resolved = filtered_resolved
+    if not resolved:
+        print("\n⚠️ No qualified option candidates after quality filters.")
+        return
+
     regime_str, regime_pct = get_nifty_market_regime(kite)
     print(f"\n🌐 [MARKET SITUATION] NIFTY 50 Regime: {regime_str} ({regime_pct:+.2f}%)")
 

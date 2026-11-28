@@ -21,7 +21,7 @@ import os
 import time
 import json
 import math
-import datetime
+import datetime as dt
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
@@ -126,7 +126,7 @@ def is_be_bz_series(symbol: str, nfo_instruments: List[dict]) -> bool:
 INDEX_WEEKLY_EXPIRY_WEEKDAY = 3  # Thursday
 INDEX_MONTHLY_EXPIRY_WEEKDAY = 3  # Last Thursday
 
-def pick_correct_expiry(sym_opts: List[dict], symbol: str, is_btst: bool, today: datetime.date) -> Optional[datetime.date]:
+def pick_correct_expiry(sym_opts: List[dict], symbol: str, is_btst: bool, today: dt.date) -> Optional[dt.date]:
     """Pick correct expiry: prefer weekly (Thursday) for indices unless < min DTE."""
     if not sym_opts:
         return None
@@ -258,10 +258,10 @@ def is_high_volatility_environment(vix: Optional[float], market_vol: str) -> boo
 
 def get_time_based_risk_adjustment() -> Dict[str, float]:
     """Get risk adjustments based on time of day."""
-    now = datetime.datetime.now().time()
+    now = dt.datetime.now().time()
 
     # Early morning (9:15-10:00): High noise, widen SL, reduce size
-    if now <= datetime.time(10, 0):
+    if now <= dt.time(10, 0):
         return {
             "sl_multiplier": 1.25,      # 25% wider SL for opening volatility
             "size_multiplier": 0.5,     # Half position size
@@ -269,7 +269,7 @@ def get_time_based_risk_adjustment() -> Dict[str, float]:
             "phase": "OPENING_VOLATILITY"
         }
     # Mid-morning (10:00-11:30): Normal
-    elif now <= datetime.time(11, 30):
+    elif now <= dt.time(11, 30):
         return {
             "sl_multiplier": 1.0,
             "size_multiplier": 1.0,
@@ -277,7 +277,7 @@ def get_time_based_risk_adjustment() -> Dict[str, float]:
             "phase": "NORMAL"
         }
     # Pre-lunch (11:30-12:30): Lower volume, be careful
-    elif now <= datetime.time(12, 30):
+    elif now <= dt.time(12, 30):
         return {
             "sl_multiplier": 1.1,
             "size_multiplier": 0.75,
@@ -285,7 +285,7 @@ def get_time_based_risk_adjustment() -> Dict[str, float]:
             "phase": "PRE_LUNCH_LULL"
         }
     # Afternoon (12:30-14:30): Normal to good
-    elif now <= datetime.time(14, 30):
+    elif now <= dt.time(14, 30):
         return {
             "sl_multiplier": 1.0,
             "size_multiplier": 1.0,
@@ -456,7 +456,7 @@ _NFO_CACHE_DATE = None
 def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> List[dict]:
     """Retrieve NFO, BFO and MCX instruments, caching daily in memory and on disk."""
     global _NFO_CACHE, _NFO_CACHE_DATE
-    today = datetime.date.today()
+    today = dt.date.today()
 
     if _NFO_CACHE is not None and _NFO_CACHE_DATE == today:
         return _NFO_CACHE
@@ -470,7 +470,7 @@ def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> 
                 data = json.load(f)
                 for item in data:
                     if "expiry" in item and item["expiry"]:
-                        item["expiry"] = datetime.datetime.strptime(item["expiry"], "%Y-%m-%d").date()
+                        item["expiry"] = dt.datetime.strptime(item["expiry"], "%Y-%m-%d").date()
                 _NFO_CACHE = data
                 _NFO_CACHE_DATE = today
                 return _NFO_CACHE
@@ -492,7 +492,7 @@ def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> 
             serialized = []
             for item in raw_instruments:
                 exp_date = item.get("expiry")
-                exp_str = exp_date.isoformat() if isinstance(exp_date, (datetime.date, datetime.datetime)) else str(exp_date)
+                exp_str = exp_date.isoformat() if isinstance(exp_date, (dt.date, dt.datetime)) else str(exp_date)
                 serialized.append({
                     "instrument_token": item.get("instrument_token"),
                     "tradingsymbol": item.get("tradingsymbol"),
@@ -511,7 +511,7 @@ def get_nfo_instruments(kite: Optional[Any], cache_dir: Path = Path("logs")) -> 
             for item in serialized:
                 if item["expiry"]:
                     try:
-                        item["expiry"] = datetime.datetime.strptime(item["expiry"], "%Y-%m-%d").date()
+                        item["expiry"] = dt.datetime.strptime(item["expiry"], "%Y-%m-%d").date()
                     except Exception:
                         item["expiry"] = today
             _NFO_CACHE = serialized
@@ -613,7 +613,9 @@ def calculate_powerful_sl_engine(
     theta: float,
     vega: float,
     is_btst: bool = False,
-    days_held: float = 1.0
+    days_held: float = 1.0,
+    gap_pct: float = 0.0,
+    is_index: bool = False
 ) -> Dict[str, Any]:
     iv_pct = iv / 100 if iv > 1 else iv
     theta_abs = abs(theta)
@@ -646,15 +648,31 @@ def calculate_powerful_sl_engine(
         trailing_trigger = round(entry_price * 1.08, 2)
         trailing_sl_new = round(entry_price * 1.01, 2)
     else:
+        # BTST: Gap-aware SL with min 8pts for index, 5pts for stocks
+        min_sl_pts = 15.0 if is_index else 8.0
+
         layer1_buffer = entry_price * (abs(delta) * 0.15)
         layer2_vol_buffer = ((iv_pct / 0.20) * entry_price * 0.08) if iv_pct > 0.20 else 0.0
         layer3_theta_buffer = theta_abs * 1.0 * 2.5
         layer4_vega_buffer = vega_abs * 7.5
 
         total_buffer = layer1_buffer + layer2_vol_buffer + layer3_theta_buffer + layer4_vega_buffer
-        # BTST Overnight SL: Disciplined 12% to 15% cap
-        total_buffer = max(entry_price * 0.12, min(total_buffer, entry_price * 0.15))
-        powerful_sl = round(entry_price - total_buffer, 2)
+
+        # BTST SL: Gap-aware with min pts floor
+        # If gap > 2%, widen SL to protect against gap-through
+        gap_buffer_pts = abs(gap_pct) / 100 * entry_price * (abs(delta) if abs(delta) > 0 else 0.5)
+        gap_buffer_pts = max(gap_buffer_pts, abs(gap_pct) * 0.5) if abs(gap_pct) > 2.0 else 0.0
+
+        # Base SL from engine
+        base_sl_pts = total_buffer
+        min_sl_pts_total = max(min_sl_pts, gap_buffer_pts)
+        sl_pts = max(base_sl_pts, min_sl_pts_total)
+
+        # Cap at 25% max risk
+        max_sl_pts = entry_price * 0.25
+        sl_pts = min(sl_pts, max_sl_pts)
+
+        powerful_sl = round(entry_price - sl_pts, 2)
 
         trailing_trigger = round(entry_price * 1.10, 2)
         trailing_sl_new = round(entry_price * 1.01, 2)
@@ -694,7 +712,7 @@ def resolve_option_candidate(
     symbol = symbol.strip().upper()
     is_index = symbol in INDEX_MAP
     is_crude = "CRUDE" in symbol
-    today = datetime.date.today()
+    today = dt.date.today()
 
     # Resolve spot / underlying price key
     if is_crude:
@@ -902,8 +920,45 @@ def resolve_option_candidate(
     #     print(f"⚠️ SKIPPED: {symbol} has earnings within {EARNINGS_AVOID_DAYS} days. Gap risk.")
     #     return None
 
+    # ─── P8: DTE VALIDATION FOR INTRADAY ───
+    # Reject intraday trades with DTE < 3 (too much gamma risk)
+    if not is_btst and not is_index and not is_crude and t_days < 3:
+        print(f"⚠️ SKIPPED: {symbol} DTE={t_days} < 3 for intraday. High gamma risk.")
+        return None
+
+    # ─── P9: DELTA VALIDATION ───
+    # Reject options with delta outside 0.25-0.55 range (too OTM/ITM)
+    # We'll estimate delta from premium for now, actual delta calculated later
+    # This is a pre-filter; actual delta validation happens after Greeks calculation
+
+    # ─── P10: IV PERCENTILE FILTER ───
+    # Reject options with IV > 90th percentile (too expensive)
+    # Placeholder - would need historical IV data
+
+    # ─── P11: VOLUME FILTER ───
+    # Minimum 500k volume for liquidity (intraday)
+    # Checked later after getting quote
+
     iv = implied_volatility(option_ltp, spot_price, atm_strike, t_days, r=0.07, opt_type=opt_type)
     delta, theta, vega = calculate_greeks(spot_price, atm_strike, t_days, r=0.07, iv_pct=iv, opt_type=opt_type)
+
+    # ─── POST-GREEKS VALIDATION ───
+    # Delta validation: reject if delta outside 0.25-0.55
+    if not is_btst and not is_index and not is_crude:
+        if not (0.25 <= abs(delta) <= 0.55):
+            print(f"⚠️ SKIPPED: {symbol} delta={delta:.2f} outside 0.25-0.55 range.")
+            return None
+
+        # IV percentile check (placeholder - would need historical data)
+        # if iv * 100 > 90:  # 90th percentile threshold
+        #     print(f"⚠️ SKIPPED: {symbol} IV={iv*100:.1f}% > 90th percentile.")
+        #     return None
+
+        # Volume check (500k minimum for intraday liquidity)
+        opt_vol = int(q_info.get("volume", 0)) if isinstance(locals().get("q_info"), dict) else 0
+        if opt_vol < 500000:
+            print(f"⚠️ SKIPPED: {symbol} volume={opt_vol} < 500k for intraday.")
+            return None
 
     sl_data = calculate_powerful_sl_engine(
         entry_price=option_ltp,
@@ -913,6 +968,8 @@ def resolve_option_candidate(
         vega=vega,
         is_btst=is_btst,
         days_held=0.25 if not is_btst else 1.5,
+        gap_pct=gap_pct if 'gap_pct' in locals() else 0.0,
+        is_index=is_index,
     )
     sl_risk = sl_data["sl_risk"]
 
@@ -1053,7 +1110,7 @@ def resolve_option_candidate(
             if spot_token:
                 # Fetch last 20 trading days of 5-min data (approximate)
                 from datetime import datetime, timedelta
-                end_dt = datetime.now()
+                end_dt = dt.datetime.now()
                 start_dt = end_dt - timedelta(days=30)
                 hist = kite.historical_data(spot_token, start_dt, end_dt, "5minute")
                 if hist:

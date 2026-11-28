@@ -117,8 +117,8 @@ def is_market_hours() -> bool:
     return time_type(14, 30) <= now <= time_type(15, 30)
 
 
-def passes_theta_filter(theta: float, ltp: float, max_decay_pct: float = 0.15) -> bool:
-    """Enforce BTST Theta decay boundary (decay should not eat over 15% of option price in 1 day)."""
+def passes_theta_filter(theta: float, ltp: float, max_decay_pct: float = 0.10) -> bool:
+    """Enforce BTST Theta decay boundary (decay should not eat over 10% of option price in 1 day). Tightened from 15%."""
     if ltp <= 0:
         return False
     return (abs(theta) / ltp) <= max_decay_pct
@@ -514,6 +514,59 @@ def main():
         c for c in resolved
         if c['symbol'] in INDEX_SYMBOLS and passes_theta_filter(c['theta'], c['ltp'])
     ]
+
+    # ─── BTST IMPROVEMENTS ───
+    # 1. Apply gap-aware SL recalculation for all candidates
+    # 2. Enforce minimum premium floor for index options
+    # 3. Apply gap-aware SL recalculation
+    from src.scanners.options_data_provider import calculate_powerful_sl_engine
+
+    for c in stock_candidates + index_candidates:
+        is_index = c['symbol'] in INDEX_SYMBOLS
+        entry_price = c['entry_price']
+        delta = c.get('delta', 0.4)
+        iv = c.get('iv', 20)
+        theta = c.get('theta', -30)
+        vega = c.get('vega', 5)
+
+        # Calculate gap from previous close (would need prev_close from quote)
+        # For now, use 0 as placeholder - in production, fetch prev_close
+        gap_pct = 0.0  # Placeholder - would need prev_close from quote
+
+        # Recalculate SL with gap-aware logic
+        sl_data = calculate_powerful_sl_engine(
+            entry_price=c['entry_price'],
+            delta=delta,
+            iv=iv,
+            theta=theta,
+            vega=vega,
+            is_btst=True,
+            days_held=1.5,
+            gap_pct=0.0,  # Placeholder
+            is_index=c['symbol'] in INDEX_SYMBOLS
+        )
+        c['powerful_sl'] = sl_data['powerful_sl']
+        c['sl'] = sl_data['powerful_sl']
+        c['sl_risk'] = sl_data['sl_risk']
+        c['sl_risk_pct'] = sl_data['sl_risk_pct']
+
+        # Recalculate targets with new SL
+        sl_risk = sl_data['sl_risk']
+        t1_gain = max(round(sl_risk * 1.5, 2), round(c['entry_price'] * 0.15, 2))
+        t2_gain = max(round(sl_risk * 2.5, 2), round(c['entry_price'] * 0.25, 2))
+        c['t1'] = round(c['entry_price'] + t1_gain, 2)
+        c['t2'] = round(c['entry_price'] + t2_gain, 2)
+        c['target_1'] = c['t1']
+        c['target_2'] = c['t2']
+        c['sl'] = c['powerful_sl']
+        c['sl_risk'] = sl_risk
+        c['sl_risk_pct'] = sl_data['sl_risk_pct']
+
+        # Update max_risk and profit potentials
+        tot_qty = c.get('total_shares', c.get('recommended_qty', 1) * c.get('lot_size', 1))
+        c['max_risk'] = round(tot_qty * sl_risk, 2)
+        c['potential_profit_t1'] = round(tot_qty * (c['t1'] - c['entry_price']), 2)
+        c['potential_profit_t2'] = round(tot_qty * (c['t2'] - c['entry_price']), 2)
 
     # Guarantee 2 strikes for BTST: If fewer than 2 qualify at min_score, fallback to top candidates
     if len(stock_candidates) + len(index_candidates) < 2 and candidates_input:
