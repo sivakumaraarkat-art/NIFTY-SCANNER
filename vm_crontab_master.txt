@@ -14,7 +14,10 @@ CRON_TZ=Asia/Kolkata
 30 08 * * 1-5 cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/news_scanner_with_twitter.py --hours 48 >> /home/ubuntu/NiftyScanner/cron_logs/cron_news_am.log 2>&1
 
 # 3b. 08:45 AM (Mon-Fri): PRE-MARKET PORTFOLIO NEWS (Yesterday 15:40 → Today 09:00 IST)
-45 08 * * 1-5 cd /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 portfolio_peak_exit_guard.py --use-demat --pre-market-news >> /home/ubuntu/NiftyScanner/cron_logs/cron_portfolio_pre_market_news.log 2>&1
+45 08 * * 1-5 cd /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 portfolio_peak_exit_guard.py --use-demat --pre-market-news --send-telegram >> /home/ubuntu/NiftyScanner/cron_logs/cron_portfolio_pre_market_news.log 2>&1
+
+# 3c. 09:10 AM (Mon-Fri): PRE-MARKET PORTFOLIO SUMMARY (Live SL/Target/Avg/Action)
+10 09 * * 1-5 cd /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 portfolio_peak_exit_guard.py --use-demat --pre-market-summary --send-telegram >> /home/ubuntu/NiftyScanner/cron_logs/cron_portfolio_pre_market_summary.log 2>&1
 
 # 4. 09:00 AM (Mon-Fri): NIFTY V14.9 Paper Trading Engine
 00 09 * * 1-5 /home/ubuntu/NiftyScanner/nifty_v14_7/run_NIFTY_V14_9_CRON.sh >> /home/ubuntu/NiftyScanner/nifty_v14_7/logs/cron_v14_9.log 2>&1

@@ -694,8 +694,8 @@
     <div class="stats-grid">
         <div class="stat-card c-purple">
             <div class="stat-label">🛡️ Portfolio Demat Guard</div>
-            <div class="stat-val">26 Holdings</div>
-            <div class="stat-sub">@Zerodhaportfoliopro_bot (1 User)</div>
+            <div class="stat-val">26 Holdings &bull; Live SL</div>
+            <div class="stat-sub">08:45 News &bull; 09:10 Live Summary &bull; 60m Cooldown &bull; Hysteresis</div>
         </div>
         <div class="stat-card c-blue">
             <div class="stat-label">🎯 7–10 Day Swing Engine</div>
@@ -704,8 +704,8 @@
         </div>
         <div class="stat-card c-blue" style="border-left: 4px solid var(--info);">
             <div class="stat-label">⚡ Options & News Engine</div>
-            <div class="stat-val">18 RSS Feeds</div>
-            <div class="stat-sub">@Swingtradeniftybot (09:50–02:00 IST)</div>
+            <div class="stat-val">6 Hourly Cycles &bull; Min 90/85</div>
+            <div class="stat-sub">18pt Min Index SL &bull; 2 Trades/Scan &bull; Max 12/Day</div>
         </div>
         <div class="stat-card c-green">
             <div class="stat-label">📈 NIFTY V14.9 Paper Engine</div>
@@ -714,13 +714,13 @@
         </div>
         <div class="stat-card c-purple" style="border-left: 4px solid var(--danger);">
             <div class="stat-label">🔥 Hero-Zero Expiry Engine</div>
-            <div class="stat-val">2x–5x Payoffs</div>
-            <div class="stat-sub">@Nifty_stage10_paper_bot (Group Chat)</div>
+            <div class="stat-val">2 Scans &bull; 3-Leg OCO</div>
+            <div class="stat-sub">14:30 & 15:05 &bull; SENSEX 8pt SL &bull; Auto-OCO Sentinel</div>
         </div>
         <div class="stat-card c-amber">
             <div class="stat-label">⏰ Crontab Automation</div>
-            <div class="stat-val">14 Active Jobs</div>
-            <div class="stat-sub">06:00 AM – 04:15 PM Mon-Fri</div>
+            <div class="stat-val">Market-Hours Guard</div>
+            <div class="stat-sub">Smart Expiry Wrapper &bull; Zero Ghost Runs &bull; Active on VM</div>
         </div>
     </div>
 
@@ -775,7 +775,19 @@
                         <span class="timeline-name">Pre-Market News Catalyst & Sentiment Scan (Intraday)</span>
                         <span class="bot-tag">@Swingtradeniftybot</span>
                     </div>
-                    <div class="timeline-desc">Scans 18 RSS feeds and BSE/NSE filings for the last 48 hours to discover high-momentum trade catalysts.</div>
+                    <div class="timeline-desc">Scans 18 RSS feeds and BSE/NSE corporate filings for the last 48 hours to discover high-momentum trade catalysts.</div>
+                </div>
+            </div>
+
+            <!-- 08:45 AM -->
+            <div class="timeline-item" data-category="portfolio">
+                <div class="time-badge" style="color: #a855f7; border-color: #a855f7;">08:45 AM</div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">📰 Pre-Market Portfolio News & Filings Briefing</span>
+                        <span class="bot-tag purple">@Zerodhaportfoliopro_bot</span>
+                    </div>
+                    <div class="timeline-desc">Scans regulatory announcements & financial news (Yesterday 15:40 → Today 09:00 IST) across all 26 Demat holdings. Dispatches top corporate drivers and sentiment flags before market open.</div>
                 </div>
             </div>
 
@@ -788,6 +800,18 @@
                         <span class="bot-tag amber">@Jinna_Nifty_BOT (2 Users)</span>
                     </div>
                     <div class="timeline-desc">Launches the production index trading engine to track live Nifty order flow throughout the day.</div>
+                </div>
+            </div>
+
+            <!-- 09:10 AM -->
+            <div class="timeline-item" data-category="portfolio">
+                <div class="time-badge" style="color: #10b981; border-color: #10b981; font-weight: 700;">09:10 AM<br><span style="font-size: 10px; font-weight: 600;">(Live Quotes)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">📊 Pre-Market Portfolio Live Snapshot (Zero Noise: SL / Target / Avg / Action)</span>
+                        <span class="bot-tag green">@Zerodhaportfoliopro_bot</span>
+                    </div>
+                    <div class="timeline-desc">Pre-market intelligence briefing delivered 5 min before opening bell. Fetches live Zerodha quotes and prints crisp 1-line execution levels for each stock: <code>SYM | ACTION | LTP | SL | T1 | T2 | Avg Cost | P&L%</code>. Pure signal with zero noise.</div>
                 </div>
             </div>
 
@@ -808,10 +832,10 @@
                 <div class="time-badge" style="color: #a855f7; border-color: #a855f7;">09:15 AM<br><span style="font-size: 10px; font-weight: 500;">(Live Ticks)</span></div>
                 <div class="timeline-content">
                     <div class="timeline-head">
-                        <span class="timeline-name">🛡️ Portfolio Continuous Sentinel (Polls Every 15 Min)</span>
+                        <span class="timeline-name">🛡️ Portfolio Continuous Sentinel (Polls Every 15 Min with Hysteresis & 60m Cooldown)</span>
                         <span class="bot-tag green">@Zerodhaportfoliopro_bot (1 User)</span>
                     </div>
-                    <div class="timeline-desc">Monitors all 26 Demat holdings silently using live tick prices. Dispatches instant alert cards on state changes, verified 72h filings, or 1-day advance quarterly earnings. Cleanly terminates at <b>03:30 PM IST</b> to prevent RAM leaks.</div>
+                    <div class="timeline-desc">Monitors all 26 Demat holdings silently using live tick prices. Equipped with <b>5-point RSI hysteresis</b> (70/65 and 36/42), <b>60-minute alert cooldown per symbol</b>, and <b>180 req/min API rate limiting</b> to eliminate Telegram spam. Dispatches instant alert cards only on true institutional state shifts or 1-day advance quarterly earnings. Cleanly terminates at <b>03:30 PM IST</b>.</div>
                 </div>
             </div>
 
@@ -827,15 +851,27 @@
                 </div>
             </div>
 
-            <!-- 09:50 AM - 02:50 PM (Hourly) -->
+            <!-- 09:45 AM - 02:45 PM (Hourly :45) -->
             <div class="timeline-item" data-category="options">
-                <div class="time-badge" style="color: #38bdf8; border-color: #38bdf8;">09:50 AM<br><span style="font-size: 10px; font-weight: 500;">(Hourly)</span></div>
+                <div class="time-badge" style="color: #38bdf8; border-color: #38bdf8;">:45 Hourly<br><span style="font-size: 10px; font-weight: 500;">(09:45–14:45)</span></div>
                 <div class="timeline-content">
                     <div class="timeline-head">
-                        <span class="timeline-name">⚡ Live News Catalyst + Intraday Options Scanner (CE & PE)</span>
+                        <span class="timeline-name">📰 Fresh News Catalyst Refresh (Runs 5 min Prior to Each Options Scan)</span>
                         <span class="bot-tag">@Swingtradeniftybot</span>
                     </div>
-                    <div class="timeline-desc">Runs fresh news sentiment scan immediately before each options cycle from <b>09:50 AM to 02:50 PM IST</b> (hourly with flock -w 300). Transitions into afternoon BTST setups. Always provides balanced Top CE & Top PE candidates with 4-Layer SL.</div>
+                    <div class="timeline-desc">Fires at 09:45, 10:45, 11:45, 12:45, 13:45, and 14:45 IST (12h lookback) to guarantee every options cycle is fueled by verified, fresh corporate catalysts.</div>
+                </div>
+            </div>
+
+            <!-- 09:50 AM - 02:50 PM (Hourly :50) -->
+            <div class="timeline-item" data-category="options">
+                <div class="time-badge" style="color: #10b981; border-color: #10b981; font-weight: 700;">:50 Hourly<br><span style="font-size: 10px; font-weight: 600;">(09:50–14:50)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">⚡ 6-Hourly Intraday Options Scanner (Min-Score 90 / Fallback 85 &bull; Max 12 Trades/Day)</span>
+                        <span class="bot-tag green">@Swingtradeniftybot</span>
+                    </div>
+                    <div class="timeline-desc">Runs 6 hourly cycles: <b>09:50, 10:50, 11:50, 12:50, 13:50, and 14:50 IST</b> strictly within market hours (guarded against ghost runs). Delivers <b>exactly 2 high-conviction trades per scan</b> using primary Min-Score 90 with automatic Fallback to 85. Enforces <b>18pt minimum absolute SL floor for Nifty/Index options</b> (calibrated up to 25pts for high premiums), DTE ≥ 3, Delta 0.25–0.55, Volume ≥ 500k, and Realized Vol 8%–35%.</div>
                 </div>
             </div>
 
@@ -859,7 +895,7 @@
                         <span class="timeline-name">⏱️ Intraday Trade Monitor & Target/SL Live Tracker</span>
                         <span class="bot-tag green">@Swingtradeniftybot</span>
                     </div>
-                    <div class="timeline-desc">Continuous real-time tracking of active intraday positions every 2 minutes. Logs exact target reached times, trailing stops, and execution timestamps.</div>
+                    <div class="timeline-desc">Continuous real-time tracking of active intraday positions every 2 minutes. Logs exact target reached times, trailing stops, execution timestamps, and 03:25 PM mandatory square-off.</div>
                 </div>
             </div>
 
@@ -871,19 +907,31 @@
                         <span class="timeline-name">📊 BTST Options & Index Next-Day P&L Summary Report</span>
                         <span class="bot-tag green">@Swingtradeniftybot</span>
                     </div>
-                    <div class="timeline-desc">Automated morning P&L settlement report summarizing overnight gap-up/gap-down performance and realized returns.</div>
+                    <div class="timeline-desc">Automated morning P&L settlement report summarizing overnight gap-up/gap-down performance and realized returns with Telegram 4096-character chunking guard.</div>
                 </div>
             </div>
 
-            <!-- 02:00 PM - 03:10 PM (Tuesdays & Thursdays) -->
+            <!-- 02:30 PM -->
             <div class="timeline-item" data-category="hero-zero">
-                <div class="time-badge" style="color: #ef4444; border-color: #ef4444;">02:00 PM+<br><span style="font-size: 10px; font-weight: 500;">(Tue & Thu)</span></div>
+                <div class="time-badge" style="color: #ef4444; border-color: #ef4444; font-weight: 700;">02:30 PM<br><span style="font-size: 10px; font-weight: 600;">(Expiry Slot 1)</span></div>
                 <div class="timeline-content">
                     <div class="timeline-head">
-                        <span class="timeline-name">🔥 NIFTY & SENSEX Weekly Expiry Hero-Zero Power Window Scans</span>
+                        <span class="timeline-name">🔥 NIFTY & SENSEX Expiry Hero-Zero Scan #1 + GTT Buy Order #1</span>
                         <span class="bot-tag red" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.3);">@Nifty_stage10_paper_bot</span>
                     </div>
-                    <div class="timeline-desc">Runs at 14:00, 14:30, 15:00, 15:05, 15:10 IST on Expiry Days (Tuesdays for NIFTY, Thursdays for SENSEX) to capture explosive Gamma Squeezes. Dispatches low-premium options with asymmetric 2x–5x payoff targets (+100% T1, +300% T2, 50% max SL cap) to Telegram group <b>Nifty v14.9 Paper Trading</b>.</div>
+                    <div class="timeline-desc">Holiday-aware execution via <code>run_hero_zero_smart.py</code> (Tuesdays/Monday-holiday for NIFTY, Thursdays/Wednesday-holiday for SENSEX). Places live breakout GTT buy order on Zerodha exchange servers with calibrated ATM premium (₹25–₹55 for SENSEX, ₹12–₹55 for NIFTY).</div>
+                </div>
+            </div>
+
+            <!-- 02:32 PM -->
+            <div class="timeline-item" data-category="hero-zero">
+                <div class="time-badge" style="color: #06b6d4; border-color: #06b6d4;">02:32 PM<br><span style="font-size: 10px; font-weight: 500;">(OCO Sentinel)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">⚡ Automated GTT Fill Sentinel: Attaches 3-Leg OCO (SL min 8pts &bull; T1 2x &bull; T2 4x)</span>
+                        <span class="bot-tag cyan">Zerodha OCO Automation</span>
+                    </div>
+                    <div class="timeline-desc">Auto-detects the 14:30 GTT Buy fill and instantly attaches a live 3-leg OCO order: Stop Loss (minimum 8pts absolute floor), Target 1 (+100% / 2x multiplier), and Target 2 (+300% / 4x multibagger). 100% hands-free exchange server protection!</div>
                 </div>
             </div>
 
@@ -901,13 +949,37 @@
 
             <!-- 03:00 PM -->
             <div class="timeline-item" data-category="options">
-                <div class="time-badge">03:00 PM</div>
+                <div class="time-badge" style="color: #38bdf8; border-color: #38bdf8; font-weight: 700;">03:00 PM<br><span style="font-size: 10px; font-weight: 600;">(BTST Daily)</span></div>
                 <div class="timeline-content">
                     <div class="timeline-head">
-                        <span class="timeline-name">BTST Options Scan (Stocks & NIFTY + SENSEX)</span>
-                        <span class="bot-tag">@Swingtradeniftybot</span>
+                        <span class="timeline-name">🌙 BTST Options Scan (Stocks & NIFTY + SENSEX &bull; Min 90 / Fallback 85)</span>
+                        <span class="bot-tag blue">@Swingtradeniftybot</span>
                     </div>
-                    <div class="timeline-desc">Identifies institutional accumulation setups for overnight gap-up / gap-down continuation with strict strike validation.</div>
+                    <div class="timeline-desc">Identifies overnight accumulation setups. Equipped with <b>P0: BTST Gap Protection</b> (widens SL dynamically if gap > 2%), <b>10% max daily theta decay cap</b>, <b>min SL 8pts for index / 5pts for stocks</b>, <b>P5: Sector Correlation Filter</b>, and <b>P7: BE/BZ trade-to-trade series block</b>.</div>
+                </div>
+            </div>
+
+            <!-- 03:05 PM -->
+            <div class="timeline-item" data-category="hero-zero">
+                <div class="time-badge" style="color: #ef4444; border-color: #ef4444; font-weight: 700;">03:05 PM<br><span style="font-size: 10px; font-weight: 600;">(Peak Gamma)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">🔥 NIFTY & SENSEX Expiry Hero-Zero Scan #2 (Peak Gamma Window 15:05–15:25)</span>
+                        <span class="bot-tag red" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.3);">@Nifty_stage10_paper_bot</span>
+                    </div>
+                    <div class="timeline-desc">Peak volatility window scan! Deploys 4 lots with minimum 8pt absolute SL floor, range-position momentum scoring, and automated GTT buy placement. Captures the final 20-minute expiry gamma explosion.</div>
+                </div>
+            </div>
+
+            <!-- 03:07 PM -->
+            <div class="timeline-item" data-category="hero-zero">
+                <div class="time-badge" style="color: #06b6d4; border-color: #06b6d4;">03:07 PM<br><span style="font-size: 10px; font-weight: 500;">(OCO Sentinel)</span></div>
+                <div class="timeline-content">
+                    <div class="timeline-head">
+                        <span class="timeline-name">⚡ Automated GTT Fill Sentinel: Attaches 3-Leg OCO for Peak Gamma Trade</span>
+                        <span class="bot-tag cyan">Zerodha OCO Automation</span>
+                    </div>
+                    <div class="timeline-desc">Instantly attaches live 3-leg OCO protection on Zerodha for the 15:05 peak gamma trade fill. Zero dangling orders into market close.</div>
                 </div>
             </div>
 
@@ -925,7 +997,7 @@
 
             <!-- 03:50 PM (Tuesdays & Thursdays) -->
             <div class="timeline-item" data-category="hero-zero">
-                <div class="time-badge" style="color: #ef4444; border-color: #ef4444;">03:50 PM<br><span style="font-size: 10px; font-weight: 500;">(Tue & Thu)</span></div>
+                <div class="time-badge" style="color: #ef4444; border-color: #ef4444;">03:50 PM<br><span style="font-size: 10px; font-weight: 500;">(Tue, Thu & Mon)</span></div>
                 <div class="timeline-content">
                     <div class="timeline-head">
                         <span class="timeline-name">🏆 Hero-Zero Expiry Final Settlement & Performance Summary</span>
@@ -976,28 +1048,27 @@
             <div class="bot-header">
                 <div class="bot-icon shield">🛡️</div>
                 <div class="bot-details">
-                    <h3>Portfolio Peak Guard & Earnings</h3>
+                    <h3>Portfolio Peak Guard & Live Briefings</h3>
                     <p>@Zerodhaportfoliopro_bot</p>
                 </div>
             </div>
             <div style="font-size: 12px; color: #a5b4fc;">
-                <b>Recipient:</b> Siva Kumar (<code>1962486108</code>) &bull; 1 User
+                <b>Recipient:</b> Siva Kumar (<code>1962486108</code>) &bull; 1 User &bull; 08:45 News &bull; 09:10 Live SL/Targets
             </div>
             <div class="tg-mock">
+                📊 <b>PRE-MARKET PORTFOLIO SNAPSHOT (09:10 AM)</b><br>
+                <div class="tg-divider"></div>
+                🟢 <b>COCHINSHIP</b> | <b>HOLD</b> | LTP: <b>₹1,082.00</b> | Avg: <b>₹1,533.96</b><br>
+                🛑 <b>SL:</b> <code>₹1,020.00</code> | 🎯 <b>T1:</b> <code>₹1,350.00</code> | 🚀 <b>T2:</b> <code>₹1,420.00</code><br>
+                🔵 <b>IRB</b> | <b>AVERAGE</b> | LTP: <b>₹17.34</b> | <b>Avg: ₹29.64</b><br>
+                🛑 <b>SL:</b> <code>₹16.50</code> | 🎯 <b>T1:</b> <code>₹22.00</code> | 🎯 <b>Action:</b> Add 1000 sh @ ₹16.50<br>
+                <div class="tg-divider"></div>
                 🔔 <b>TOMORROW RESULTS: SUZLON</b><br>
+                💰 <b>LTP:</b> <code>₹36.13</code> | 🔴 <b>P&L:</b> -32.1% (2,228 Qty)<br>
+                🎯 <b>Action Today:</b> <b>SAFE HOLD TODAY</b> with trailing stop at <b>₹34.00</b><br>
+                🔮 <b>Panic Dip GTT:</b> <code>₹31.10 – ₹33.20</code> | 📈 <b>Spike Exit:</b> <code>₹40.50</code><br>
                 <div class="tg-divider"></div>
-                💰 <b>LTP:</b> <code>₹38.34</code> | <b>Avg:</b> <code>₹53.23</code> | 🔴 <b>P&L:</b> <b>-28.0%</b> (2,228 Qty)<br>
-                ⚡ <b>RSI:</b> <code>22.0</code> (Oversold Floor) | 🏛️ <b>FII+DII:</b> <code>30.1%</code> (B-Tier)<br>
-                <div class="tg-divider"></div>
-                📊 <b>Analyst Expectations:</b><br>
-                • <b>Consensus:</b> Q2 WTG deliveries ~400+ MW, EBITDA margins ~14.5-16%<br>
-                • <b>Key Trigger:</b> 5.4 GW execution order backlog commissioning<br>
-                <div class="tg-divider"></div>
-                🎯 <b>Action Today (Before 3:30 PM):</b><br>
-                <b>ADD 50% TRANCHE @ ₹36.00</b> (Cuts average from ₹53.23 to ₹44.50)<br>
-                🔮 <b>Tomorrow's Strategy:</b><br>
-                • 📉 <b>Panic Dip GTT:</b> <code>₹33.70 – ₹35.30</code> (-8% to -12%)<br>
-                • 📈 <b>Spike Exit:</b> <code>₹42.95</code> (+12%)
+                🛡️ <i>Equipped with 60m Alert Cooldown, 5pt RSI Hysteresis & 180 req/min API Rate Limiter</i>
             </div>
         </div>
 
@@ -1044,22 +1115,22 @@
                 </div>
             </div>
             <div style="font-size: 12px; color: #38bdf8;">
-                <b>Recipient:</b> Siva Kumar (<code>1962486108</code>) &bull; 1 User
+                <b>Recipient:</b> Siva Kumar (<code>1962486108</code>) &bull; 1 User &bull; 6 Hourly Cycles &bull; Min 90 / 85 Fallback
             </div>
             <div class="tg-mock">
                 ⚡ <b>INTRADAY OPTIONS (CE & PE) — 4-LAYER SL</b><br>
                 <div class="tg-divider"></div>
-                🟢 <b>1. TATASTEEL 175 CE</b> (Spot: ₹175.46 | 93/100)<br>
-                💰 <b>Entry:</b> <code>₹5.25</code> | 🛑 <b>4-Layer SL:</b> <code>₹4.20</code> (-20%)<br>
-                🎯 <b>T1:</b> <code>₹5.67</code> (+8%) | 🏁 <b>T2:</b> <code>₹6.04</code> (+15%)<br>
-                📦 <b>Lot:</b> 1 Lot (2,750 qty) | <b>Max Risk:</b> ₹2,887.50<br>
+                🟢 <b>1. NIFTY 25650 CE</b> (Spot: 25,644.95 | 92/100)<br>
+                💰 <b>Entry:</b> <code>₹86.85</code> | 🛑 <b>18pt Min SL:</b> <code>₹68.85</code> (18.0 pts floor)<br>
+                🎯 <b>T1 (1.35R):</b> <code>₹111.15</code> (+28%) | 🏁 <b>T2 (2.35R):</b> <code>₹129.15</code> (+49%)<br>
+                📦 <b>Lot:</b> 8 Lots (520 qty) | <b>Max Risk:</b> ₹9,360.00 (1% Budget)<br>
                 <div class="tg-divider"></div>
-                🔴 <b>2. NATIONALUM 320 PE</b> (Spot: ₹321.95 | 92/100)<br>
-                💰 <b>Entry:</b> <code>₹9.75</code> | 🛑 <b>4-Layer SL:</b> <code>₹7.80</code> (-20%)<br>
-                🎯 <b>T1:</b> <code>₹10.53</code> (+8%) | 🏁 <b>T2:</b> <code>₹11.21</code> (+15%)<br>
-                📦 <b>Lot:</b> 1 Lot (1,875 qty) | <b>Max Risk:</b> ₹3,656.25<br>
+                🔴 <b>2. TATASTEEL 172.5 PE</b> (Spot: ₹171.20 | 90/100)<br>
+                💰 <b>Entry:</b> <code>₹5.80</code> | 🛑 <b>4-Layer SL:</b> <code>₹5.05</code> (-13.0%)<br>
+                🎯 <b>T1:</b> <code>₹6.85</code> (+18%) | 🏁 <b>T2:</b> <code>₹7.60</code> (+31%)<br>
+                📦 <b>Lot:</b> 1 Lot (5,500 qty) | <b>Max Risk:</b> ₹4,125.00<br>
                 <div class="tg-divider"></div>
-                📰 <b>CATALYSTS:</b> 18 Feeds + Sentiment + Multi-Layer Stop Loss
+                📰 <b>UPGRADES:</b> 18pt Index SL Floor &bull; BTST Gap Protection &bull; 10% Theta Decay Cap &bull; DTE &ge; 3
             </div>
         </div>
 
@@ -1096,34 +1167,24 @@
                 </div>
             </div>
             <div style="font-size: 12px; color: #f87171;">
-                <b>Routing:</b> Telegram Group Chat <b>Nifty v14.9 Paper Trading</b> (<code>-1004389382181</code>)
+                <b>Routing:</b> Telegram Group Chat <b>Nifty v14.9 Paper Trading</b> &bull; 2 Scans (14:30 & 15:05) &bull; 3-Leg OCO
             </div>
             <div class="tg-mock">
-                🔥 <b>STAGE 10 — NIFTY HERO-ZERO EXPIRY</b> 🔥<br>
+                🔥 <b>STAGE 10 — SENSEX HERO-ZERO EXPIRY</b> 🔥<br>
                 <div class="tg-divider"></div>
-                📅 <b>Expiry:</b> <code>14-Oct-2026 (Tuesday)</code><br>
-                🕒 <b>Session:</b> <code>03:05 PM Peak Volatility Window IST</code><br>
+                📅 <b>Expiry:</b> <code>03-Dec-2026 (Thursday)</code><br>
+                🕒 <b>Session:</b> <code>03:05 PM Peak Gamma Window IST</code><br>
                 ⚡ <b>Payoff:</b> <code>Asymmetric 2x - 5x Payoff</code><br>
-                🤖 <b>Bot:</b> <code>@Nifty_stage10_paper_bot</code><br>
                 <div class="tg-divider"></div>
-                🏛️ 🟢 <b>#1 BUY NIFTY 24900 CE (HERO-ZERO)</b><br>
+                🏛️ 🔴 <b>#1 BUY SENSEX 83100 PE (HERO-ZERO)</b><br>
+                💰 <b>LTP:</b> <code>₹22.00</code> (ATM Strike &bull; Range Pos 32% 📉)<br>
+                🛑 <b>Risk SL:</b> <code>₹11.00</code> (<b>-11.00 pts / Min 8pts Floor Active</b>)<br>
+                🥇 <b>Target 1:</b> <code>₹44.00</code> (<b>+22.00 pts / +100% / 2.0R</b>)<br>
+                🚀 <b>Target 2:</b> <code>₹88.00</code> (<b>+66.00 pts / +300% / 6.0R</b>)<br>
+                📦 <b>Lots:</b> <code>4 lots (20/lot = 80 qty)</code> | <b>Max Risk:</b> ₹880.00<br>
                 <div class="tg-divider"></div>
-                ⭐ <b>Quality Score:</b> <code>88/100</code><br>
-                🚀 <b>Catalyst:</b> <code>BULLISH MOMENTUM SURGE 🚀</code><br>
-                <br>
-                💰 <b>HERO-ZERO TRADE LEVELS</b><br>
-                ├─ 📊 <b>Spot Price:</b> <code>₹24,800.00</code> (ATM 24900)<br>
-                ├─ 🟢 <b>Entry Price:</b> <code>₹20.00</code> (Low Premium)<br>
-                ├─ 🛑 <b>Risk SL:</b> <code>₹10.00</code> (<b>-10.00 pts / 50% Cap</b>)<br>
-                ├─ 🥇 <b>Target 1:</b> <code>₹40.00</code> (<b>+20.00 pts / +100%</b>)<br>
-                └─ 🚀 <b>Target 2:</b> <code>₹80.00</code> (<b>+60.00 pts / +300%</b>)<br>
-                <br>
-                📦 <b>POSITION SIZING & RISK</b><br>
-                ├─ 🏷️ <b>Lots:</b> <code>2 lots (25/lot = 50 qty)</code><br>
-                ├─ 💵 <b>Capital:</b> <code>₹1,000.00</code><br>
-                └─ 🛡️ <b>Max Risk:</b> <code>₹500.00</code><br>
-                <div class="tg-divider"></div>
-                🔥 <b>V14.7 STRATEGY:</b> <i>Risk small capital for explosive 2x-5x expiry payoff. Book 50% @ T1!</i>
+                ⚡ <b>AUTOMATED 3-LEG OCO GTT:</b> Attached at 15:07 via Sentinel #346539402!<br>
+                🔬 <b>DEEP ANALYSIS:</b> SL 50% (11 pts) | T1 100% (2.0R) | T2 300% (6.0R) | MaxRisk 100% cap
             </div>
         </div>
 
@@ -1764,6 +1825,91 @@
         </div>
     </div>
 
+    <!-- 6. MASTER PRODUCTION UPGRADES & ALGORITHMIC GUARDS (NOV 28 UPGRADES) -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>🚀 Master Production Upgrades & Algorithmic Guard Matrix (Nov 28, 2026 Engine Overhaul)</span>
+        </div>
+    </div>
+
+    <div class="pillars-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-bottom: 32px;">
+        <!-- UPGRADE 1 -->
+        <div class="pillar-card p-purple">
+            <h4>🛡️ 1. Dynamic 18pt Minimum Index Option SL</h4>
+            <p>Eliminated premature stop-outs from normal 15–20pt index wicks. Replaced rigid % stop with a <b>calibrated absolute floor</b> for NIFTY, BANKNIFTY, SENSEX, FINNIFTY, and MIDCPNIFTY:<br>
+            &bull; &lt;₹80 Premium: <b>15.0 pts SL</b><br>
+            &bull; ₹80–₹120 Premium: <b>18.0 pts SL</b><br>
+            &bull; ₹120–₹200 Premium: <b>22.0 pts SL</b><br>
+            &bull; &gt;₹200 Premium: <b>25.0 pts SL</b></p>
+            <div class="pillar-stocks">Active across Intraday & BTST in <code>options_data_provider.py</code></div>
+        </div>
+
+        <!-- UPGRADE 2 -->
+        <div class="pillar-card p-blue">
+            <h4>🌙 2. P0: BTST Gap Protection Shield</h4>
+            <p>Backtest revealed 78% of BTST stop-outs occurred at 09:15 AM due to overnight gaps. The engine now detects overnight gap-ups/gap-downs: if gap &gt; 2%, it <b>dynamically widens the SL by the gap distance</b> (capped at 25% max account risk), preventing instant morning stop-outs while positions absorb the opening bell shock!</p>
+            <div class="pillar-stocks">Tightened Theta Decay Cap to 10%/day &bull; 8pt Index / 5pt Stock Floor</div>
+        </div>
+
+        <!-- UPGRADE 3 -->
+        <div class="pillar-card" style="border-left: 4px solid var(--danger);">
+            <h4>🔥 3. SENSEX Hero-Zero 8pt Min SL & ATM Premium</h4>
+            <p>Audited Nov 26 SENSEX trade (-49.9% loss). Fixed two fatal flaws:<br>
+            1. <b>Min 8pt Absolute SL:</b> Replaced 4.03pt SL (50% of ₹8.05) with 8pt minimum to survive SENSEX 15–20pt wicks.<br>
+            2. <b>ATM Range Calibration:</b> Auto-corrects deep OTM ₹8–₹15 range to <b>₹25–₹55 ATM options</b> with delta 0.30–0.55.<br>
+            3. <b>Range Position Momentum:</b> Replaces day-open bias with intraday range position.</p>
+            <div class="pillar-stocks">Deploys 4 Lots @ 14:30 & 15:05 strictly on Thursday Expiries</div>
+        </div>
+
+        <!-- UPGRADE 4 -->
+        <div class="pillar-card" style="border-left: 4px solid var(--cyan);">
+            <h4>⚡ 4. Automated 3-Leg OCO GTT for Hero-Zero</h4>
+            <p>Solved the missing SL/Target GTT issue! The new <code>gtt_fill_sentinel.py</code> runs at <b>14:32 and 15:07 IST</b> (2 min post-scan). The moment a Hero-Zero GTT Buy fills, it automatically attaches a <b>live 3-leg OCO order on Zerodha</b>:<br>
+            &bull; <b>Leg 1 (Stop Loss):</b> Minimum 8pts absolute floor<br>
+            &bull; <b>Leg 2 (Target 1):</b> +100% / 2x Multiplier<br>
+            &bull; <b>Leg 3 (Target 2):</b> +300% / 4x Multibagger</p>
+            <div class="pillar-stocks">100% Automated on Zerodha Exchange Servers &bull; Zero Manual Orders</div>
+        </div>
+
+        <!-- UPGRADE 5 -->
+        <div class="pillar-card p-green">
+            <h4>🤖 5. Smart Holiday-Aware Expiry Wrapper</h4>
+            <p>Built <code>run_hero_zero_smart.py</code>: eliminates blind cron runs on non-expiry days. Automatically inspects official NSE trading calendar (<code>trader-in/holidays.json</code>):<br>
+            &bull; <b>NIFTY:</b> Executes Tuesday normally; shifts to Monday if Tuesday is holiday.<br>
+            &bull; <b>SENSEX:</b> Executes Thursday normally; shifts to Wednesday if Thursday is holiday.<br>
+            &bull; On all other days, the wrapper exits in 0.1s with <b>zero API calls and zero spam</b>.</p>
+            <div class="pillar-stocks">Consolidated to exactly 2 scans/day: 14:30 & 15:05 IST</div>
+        </div>
+
+        <!-- UPGRADE 6 -->
+        <div class="pillar-card p-blue">
+            <h4>📊 6. 6-Hourly Intraday Scan & Min 90/85 Fallback</h4>
+            <p>Replaced noisy 30-min scanning with <b>6 hourly precision cycles</b> (09:50, 10:50, 11:50, 12:50, 13:50, 14:50). Strictly blocked outside market hours. Delivers <b>exactly 2 high-conviction trades per scan</b> using primary Min-Score 90 with automatic Fallback to 85. Enforces DTE &ge; 3, Delta 0.25–0.55, Volume &ge; 500k, and Realized Vol 8%–35%.</p>
+            <div class="pillar-stocks">Target 10–15 elite stocks/day &bull; Max 12 daily trades &bull; Circuit Breaker @ 3 SLs</div>
+        </div>
+
+        <!-- UPGRADE 7 -->
+        <div class="pillar-card p-purple">
+            <h4>📱 7. Pre-Market Live Snapshot (09:10 AM) & News (08:45 AM)</h4>
+            <p>Pre-market intelligence delivered directly to <code>@Zerodhaportfoliopro_bot</code>:<br>
+            &bull; <b>08:45 AM:</b> Pre-market news scan covering corporate filings from previous close.<br>
+            &bull; <b>09:10 AM:</b> Live portfolio snapshot fetching real-time Zerodha quotes. Formats each holding into a crisp, single-line ticket: <code>SYM | ACTION | LTP | SL | T1 | T2 | Avg Cost | P&L%</code>.<br>
+            &bull; Delivers 100% actionable clarity before the opening bell rings!</p>
+            <div class="pillar-stocks">Zero noise &bull; Live Zerodha LTP &bull; Pre-calculated SL & Targets</div>
+        </div>
+
+        <!-- UPGRADE 8 -->
+        <div class="pillar-card p-amber">
+            <h4>🔒 8. Portfolio Anti-Spam: Hysteresis, Cooldown & Rate Limiter</h4>
+            <p>Tackled the 60+ alerts/day noise problem in <code>PORTFOLIO_PEAK_EXIT_GUARD</code>:<br>
+            &bull; <b>5-Point RSI Hysteresis:</b> Triggers SELL only crossing UP through 70; BUYBACK only crossing DOWN through 65. Zero flip-flops!<br>
+            &bull; <b>60-Minute Alert Cooldown:</b> Persisted to <code>.alert_cooldown.json</code> per symbol.<br>
+            &bull; <b>Session Deduplication:</b> Max 1 alert per symbol+decision per day.<br>
+            &bull; <b>180 req/min API Limiter:</b> Throttles Kite calls to eliminate 'Too many requests' errors.</p>
+            <div class="pillar-stocks">Alert volume reduced from 60+/day down to 8–15 high-value alerts/day</div>
+        </div>
+    </div>
+
     <!-- 7. MASTER COMMAND REFERENCE -->
     <div class="section-header">
         <div class="section-title">
@@ -1787,18 +1933,33 @@
     </div>
 
     <div class="code-box">
-        <span><b>Tomorrow Results & Analyst Analysis:</b> python portfolio_peak_exit_guard.py --use-demat --tomorrow-results</span>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('python portfolio_peak_exit_guard.py --use-demat --tomorrow-results')">Copy</button>
+        <span><b>📰 Pre-Market Portfolio News Briefing (08:45 AM Mon-Fri):</b> cd /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 portfolio_peak_exit_guard.py --use-demat --pre-market-news</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 portfolio_peak_exit_guard.py --use-demat --pre-market-news')">Copy</button>
     </div>
 
     <div class="code-box">
-        <span><b>Portfolio Audit & Telegram Dispatch:</b> python portfolio_peak_exit_guard.py --use-demat --send-telegram --force-all</span>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('python portfolio_peak_exit_guard.py --use-demat --send-telegram --force-all')">Copy</button>
+        <span><b>📊 Pre-Market Portfolio Live Snapshot (09:10 AM Mon-Fri):</b> cd /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 portfolio_peak_exit_guard.py --use-demat --pre-market-summary</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/PORTFOLIO_PEAK_EXIT_GUARD && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 portfolio_peak_exit_guard.py --use-demat --pre-market-summary')">Copy</button>
     </div>
 
     <div class="code-box">
-        <span><b>Hourly Intraday Options Scan (VM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 60</span>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 60')">Copy</button>
+        <span><b>⚡ 6-Hourly Intraday Options Scan (09:50–14:50 IST &bull; Min 90 / Fallback 85):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 90 --fallback-score 85 --max-daily-trades 12 --max-trades-per-scan 2</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_options_intraday_scan_powerful_sl.py --use-news-candidates --min-score 90 --fallback-score 85 --max-daily-trades 12 --max-trades-per-scan 2')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>🌙 BTST Options Scan (15:00 IST Daily &bull; Min 90 / Fallback 85 &bull; Gap Protection):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 90 --fallback-score 85</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_btst_options_scan_powerful_sl.py --use-news-candidates --include-nifty --min-score 90 --fallback-score 85')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>🔥 Smart Hero-Zero Expiry Runner (14:30 & 15:05 &bull; Holiday-Aware &bull; NIFTY & SENSEX):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_hero_zero_smart.py --symbol BOTH</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/run_hero_zero_smart.py --symbol BOTH')">Copy</button>
+    </div>
+
+    <div class="code-box">
+        <span><b>⚡ Automated GTT Fill Sentinel (Morning 09:16–10:30 & Hero-Zero 14:32/15:07):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/gtt_fill_sentinel.py --cron')">Copy</button>
     </div>
 
     <div class="code-box">
@@ -1812,18 +1973,13 @@
     </div>
 
     <div class="code-box">
+        <span><b>Weekend Backtest Engine (Saturdays 10:00 AM &bull; 5-Day Historical Replay):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/weekend_backtest_engine.py --days 5 --test-thresholds</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/weekend_backtest_engine.py --days 5 --test-thresholds')">Copy</button>
+    </div>
+
+    <div class="code-box">
         <span><b>Daily Pre-Market System Maintenance (06:00 AM):</b> /home/ubuntu/NiftyScanner/daily_system_maintenance.sh</span>
         <button class="copy-btn" onclick="navigator.clipboard.writeText('/home/ubuntu/NiftyScanner/daily_system_maintenance.sh')">Copy</button>
-    </div>
-
-    <div class="code-box">
-        <span><b>NIFTY Hero-Zero Expiry Scan (Tuesdays @ 03:05 PM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py</span>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/nifty_hero_zero_expiry_scanner.py')">Copy</button>
-    </div>
-
-    <div class="code-box">
-        <span><b>BSE SENSEX Hero-Zero Expiry Scan (Thursdays @ 03:05 PM):</b> cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py</span>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('cd /home/ubuntu/NiftyScanner/STOCK_SWING_V1_updated && PYTHONPATH=/home/ubuntu/NiftyScanner/nifty_v14_7/venv/lib/python3.12/site-packages /usr/bin/python3 src/scanners/sensex_hero_zero_expiry_scanner.py')">Copy</button>
     </div>
 
     <!-- FOOTER -->
